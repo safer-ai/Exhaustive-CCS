@@ -24,26 +24,26 @@ def loadModel(mdl_name, cache_dir, parallelize):
     print("-------- model and tokenizer --------")
     print("loading model and tokenizer. model name = {}, cache_dir = {}".format(mdl_name, cache_dir))
     if mdl_name in ["gpt-neo-2.7B", "gpt-j-6B"]:
-        model = AutoModelForCausalLM.from_pretrained("EleutherAI/{}".format(mdl_name), cache_dir=cache_dir)
-        tokenizer = AutoTokenizer.from_pretrained("EleutherAI/{}".format(mdl_name), cache_dir=cache_dir)
+        model = AutoModelForCausalLM.from_pretrained("EleutherAI/{}".format(mdl_name))
+        tokenizer = AutoTokenizer.from_pretrained("EleutherAI/{}".format(mdl_name))
     elif mdl_name in ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl"]:
-        model = GPT2LMHeadModel.from_pretrained(mdl_name, cache_dir=cache_dir)
-        tokenizer = GPT2Tokenizer.from_pretrained(mdl_name, cache_dir=cache_dir)
+        model = GPT2LMHeadModel.from_pretrained(mdl_name)
+        tokenizer = GPT2Tokenizer.from_pretrained(mdl_name)
     elif "T0" in mdl_name:
-        model = AutoModelForSeq2SeqLM.from_pretrained("bigscience/{}".format(mdl_name), cache_dir=cache_dir)
-        tokenizer = AutoTokenizer.from_pretrained("bigscience/{}".format(mdl_name), cache_dir=cache_dir)
+        model = AutoModelForSeq2SeqLM.from_pretrained("bigscience/{}".format(mdl_name))
+        tokenizer = AutoTokenizer.from_pretrained("bigscience/{}".format(mdl_name))
     elif "unifiedqa" in mdl_name:
-        model = T5ForConditionalGeneration.from_pretrained("allenai/" + mdl_name, cache_dir=cache_dir)
-        tokenizer = AutoTokenizer.from_pretrained("allenai/" + mdl_name, cache_dir=cache_dir)
+        model = T5ForConditionalGeneration.from_pretrained("allenai/" + mdl_name)
+        tokenizer = AutoTokenizer.from_pretrained("allenai/" + mdl_name)
     elif "deberta" in mdl_name:
-        model = AutoModelForSequenceClassification.from_pretrained("microsoft/{}".format(mdl_name), cache_dir=cache_dir)
-        tokenizer = AutoTokenizer.from_pretrained("microsoft/" + mdl_name, cache_dir=cache_dir)
+        model = AutoModelForSequenceClassification.from_pretrained("microsoft/{}".format(mdl_name))
+        tokenizer = AutoTokenizer.from_pretrained("microsoft/" + mdl_name)
     elif "roberta" in mdl_name:
-        model = AutoModelForSequenceClassification.from_pretrained(mdl_name, cache_dir=cache_dir)
-        tokenizer = AutoTokenizer.from_pretrained(mdl_name, cache_dir=cache_dir)
+        model = AutoModelForSequenceClassification.from_pretrained(mdl_name)
+        tokenizer = AutoTokenizer.from_pretrained(mdl_name)
     elif "t5" in mdl_name:
-        model = AutoModelWithLMHead.from_pretrained(mdl_name, cache_dir=cache_dir)
-        tokenizer = AutoTokenizer.from_pretrained(mdl_name, cache_dir=cache_dir)
+        model = AutoModelWithLMHead.from_pretrained(mdl_name)
+        tokenizer = AutoTokenizer.from_pretrained(mdl_name)
 
     model.eval()
 
