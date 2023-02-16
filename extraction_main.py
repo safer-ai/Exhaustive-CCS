@@ -27,7 +27,7 @@ parser.add_argument("--prefix", nargs="+", default=["normal"], choices=registere
 parser.add_argument("--datasets", nargs="+", default=registered_dataset_list)
 parser.add_argument("--test", type=str, default="testall", choices=["testone", "testall"])
 parser.add_argument("--data_num", type=int, default=1000)
-parser.add_argument("--method_list", nargs="+", default=["0-shot", "TPC", "KMeans", "LR", "BSS", "Prob"])
+parser.add_argument("--method_list", nargs="+", default=["0-shot", "TPC", "KMeans", "LR", "BSS", "CCS"])
 parser.add_argument(
     "--mode", type=str, default="auto", choices=["auto", "minus", "concat"], help="How you combine h^+ and h^-."
 )
@@ -154,7 +154,7 @@ if __name__ == "__main__":
                 continue
             print("-------- method = {} --------".format(method))
 
-            mode = args.mode if args.mode != "auto" else ("minus" if method != "Prob" else "concat")
+            mode = args.mode if args.mode != "auto" else ("minus" if method != "CCS" else "concat")
             # load the data_dict and permutation_dict
             data_dict, permutation_dict = getDic(
                 mdl_name=model,
@@ -220,7 +220,7 @@ if __name__ == "__main__":
                             std=np.std(res[key]),
                             location=args.location,
                             layer=args.layer,
-                            loss=np.mean(lss[key]) if method in ["Prob", "BSS"] else "",
+                            loss=np.mean(lss[key]) if method in ["CCS", "BSS"] else "",
                         )
                     else:
                         for idx in range(len(res[key])):
@@ -236,7 +236,7 @@ if __name__ == "__main__":
                                 std="",
                                 location=args.location,
                                 layer=args.layer,
-                                loss=lss[key][idx] if method in ["Prob", "BSS"] else "",
+                                loss=lss[key][idx] if method in ["CCS", "BSS"] else "",
                             )
 
         saveCsv(csv, global_prefix, "After finish {}".format(method))
