@@ -6,6 +6,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 import umap
 import matplotlib.pyplot as plt
+import pandas as pd
+import os
 
 
 class myReduction:
@@ -94,9 +96,10 @@ def get_all_data(data_dict):
 
 
 class ConsistencyMethod(object):
-    def __init__(self, verbose=False, include_bias=True):
+    def __init__(self, verbose=False, include_bias=True, no_train=False):
         self.includa_bias = include_bias
         self.verbose = verbose
+        self.no_train = no_train
 
     def add_ones_dimension(self, h):
         if self.includa_bias:
@@ -143,7 +146,7 @@ class ConsistencyMethod(object):
         return p0, p1
 
     # Return the accuracy of (data, label)
-    def get_acc(self, theta_np, data: list, label, getloss):
+    def get_acc(self, theta_np, data: list, label, getloss, save_file=None):
         """
         Computes the accuracy of a given direction theta_np represented as a numpy array
         """
@@ -153,9 +156,16 @@ class ConsistencyMethod(object):
         label = label.reshape(-1)
         predictions = (avg_confidence < 0.5).astype(int)[:, 0]
         acc = (predictions == label).mean()
+
+        if save_file is not None:
+            # save (p0, p1, label) to file using pandas
+            df = pd.DataFrame({"p0": p0[:, 0], "p1": p1[:, 0], "label": label})
+            df.to_csv(save_file, index=False)
+
         if getloss:
             loss = self.get_loss(torch.tensor(p0), torch.tensor(p1)).cpu().detach().item()
             return max(acc, 1 - acc), loss
+
         return max(acc, 1 - acc)
 
     def train(self):
@@ -173,6 +183,10 @@ class ConsistencyMethod(object):
             init_theta = init_theta / np.linalg.norm(init_theta)
         else:
             init_theta = self.init_theta
+
+        if self.no_train:
+            return init_theta, 0
+
         theta = torch.tensor(init_theta, dtype=torch.float, requires_grad=True, device=self.device)
 
         # set up optimizer
@@ -272,9 +286,9 @@ class ConsistencyMethod(object):
 
         return self.best_theta, self.best_loss, best_acc
 
-    def score(self, data: list, label, getloss=False):
+    def score(self, data: list, label, getloss=False, save_file=None):
         self.validate_data(data)
-        return self.get_acc(self.best_theta, data, label, getloss)
+        return self.get_acc(self.best_theta, data, label, getloss, save_file=save_file)
 
 
 class myClassifyModel(LogisticRegression):
@@ -414,14 +428,23 @@ class myClassifyModel(LogisticRegression):
             self.loss = minloss
             self.set_params(final_coef, final_bias)
 
-    def score(self, data, label, getloss=False, sample_weight=None):
+    def score(self, data, label, getloss=False, sample_weight=None, save_file=None):
         if self.method == "KMeans":
+            if save_file is not None:
+                print("save_file not supported for KMeans")
+
             prediction = self.model.predict(data)
             acc = max(np.mean(prediction == label), np.mean(1 - prediction == label))
             if getloss:
                 return acc, 0.0
             return acc
         else:
+            if save_file is not None:
+                # compute for save_file
+                predictions = super().predict_proba(data)
+                df = pd.DataFrame({"label": label, "prediction": predictions[:, 1]})
+                df.to_csv(save_file, index=False)
+
             if sample_weight is not None:
                 acc = super().score(data, label, sample_weight)
             else:
@@ -494,6 +517,7 @@ def mainResults(
     classification_method="BSS",  # can be LR, TPC and BSS
     print_more=False,
     learn_dict={},
+    save_file_prefix=None,
 ):
 
     start = time.time()
@@ -503,6 +527,11 @@ def mainResults(
                 projection_method, n_components, projection_dict, classification_method, test_dict
             )
         )
+
+    no_train = False
+    if classification_method == "Random":
+        no_train = True
+        classification_method = "CCS"
 
     # use all data (not split) to do the PCA
     proj_states = getConcat([getConcat([data_dict[key][w][0] for w in lis]) for key, lis in projection_dict.items()])
@@ -515,7 +544,7 @@ def mainResults(
     # pairFunc = partial(getPair, data_dict = data_dict, permutation_dict = permutation_dict, projection_model = projection_model)
 
     if classification_method == "CCS":
-        classify_model = ConsistencyMethod(verbose=print_more)
+        classify_model = ConsistencyMethod(verbose=print_more, no_train=no_train)
         datas, label = getPair(
             data_dict=data_dict,
             permutation_dict=permutation_dict,
@@ -577,9 +606,17 @@ def mainResults(
                 target_dict=dic,
                 split="test",
             )
+
+            method = classification_method if not no_train else "Random"
             if classification_method == "CCS":
                 data = [data[:, : data.shape[1] // 2], data[:, data.shape[1] // 2 :]]
-            acc, loss = classify_model.score(data, label, getloss=True)
+
+            save_file = f"{save_file_prefix}/{key}{prompt_idx}_{method}.csv" if save_file_prefix else None
+            if save_file:
+                os.makedirs(os.path.dirname(save_file), exist_ok=True)
+
+            acc, loss = classify_model.score(data, label, getloss=True, save_file=save_file)
+
             res[key].append(acc)
             lss[key].append(loss)
 

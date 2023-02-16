@@ -1,3 +1,4 @@
+from typing import Optional
 import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -48,6 +49,7 @@ parser.add_argument("--layer", type=int, default=-1)
 parser.add_argument("--zero", type=str, default="generation_results")
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--prompt_save_level", default="all", choices=["single", "all"])
+parser.add_argument("--save_states", action="store_true", help="Whether to save the p0, p1, labels.")
 args = parser.parse_args()
 
 dataset_list = args.datasets
@@ -158,7 +160,7 @@ if __name__ == "__main__":
                 continue
             print("-------- method = {} --------".format(method))
 
-            mode = args.mode if args.mode != "auto" else ("minus" if method != "CCS" else "concat")
+            mode = args.mode if args.mode != "auto" else ("minus" if method not in {"CCS", "Random"} else "concat")
             # load the data_dict and permutation_dict
             data_dict, permutation_dict = getDic(
                 mdl_name=model,
@@ -180,6 +182,8 @@ if __name__ == "__main__":
 
                 # return a dict with the same shape as test_dict
                 # for each key test_dict[key] is a unitary list
+                save_file_prefix = f"{args.save_dir}/states_{args.model}/{train_set}" if args.save_states else None
+
                 res, lss, pmodel, cmodel = mainResults(
                     data_dict=data_dict,
                     permutation_dict=permutation_dict,
@@ -188,6 +192,7 @@ if __name__ == "__main__":
                     n_components=n_components,
                     projection_method="PCA",
                     classification_method=method,
+                    save_file_prefix=save_file_prefix,
                 )
 
                 # save params except for KMeans
