@@ -1,0 +1,9 @@
+matplotlib==3.4.3
+numpy==1.21.2
+pandas==1.4.4
+promptsource==0.2.3
+scikit_learn==1.2.1
+seaborn==0.11.2
+torch==1.13.1
+transformers==4.21.3
+umap==0.1.1
