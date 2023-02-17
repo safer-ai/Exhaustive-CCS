@@ -50,6 +50,7 @@ parser.add_argument("--zero", type=str, default="generation_results")
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--prompt_save_level", default="all", choices=["single", "all"])
 parser.add_argument("--save_states", action="store_true", help="Whether to save the p0, p1, labels.")
+parser.add_argument("--test_on_train", action="store_true", help="Whether to test on the train set.")
 args = parser.parse_args()
 
 dataset_list = args.datasets
@@ -193,6 +194,7 @@ if __name__ == "__main__":
                     projection_method="PCA",
                     classification_method=method,
                     save_file_prefix=save_file_prefix,
+                    test_on_train=args.test_on_train,
                 )
 
                 # save params except for KMeans

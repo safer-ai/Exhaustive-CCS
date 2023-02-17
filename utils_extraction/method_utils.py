@@ -518,6 +518,7 @@ def mainResults(
     print_more=False,
     learn_dict={},
     save_file_prefix=None,
+    test_on_train=False,
 ):
 
     start = time.time()
@@ -604,7 +605,7 @@ def mainResults(
                 permutation_dict=permutation_dict,
                 projection_model=projection_model,
                 target_dict=dic,
-                split="test",
+                split=("train" if test_on_train else "test"),
             )
 
             method = classification_method if not no_train else "Random"
