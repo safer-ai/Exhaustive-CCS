@@ -2,7 +2,7 @@
 
 
 # Extract UQA on datasets where it is good
-for seed in {1..4}; do
+for seed in {1..9}; do
     python extraction_main.py --model unifiedqa-t5-11b --datasets imdb amazon-polarity ag-news dbpedia-14 copa boolq story-cloze --method_list CCS LR Random --seed $seed
     # copy the csv file so that it doesn't get overwritten
     cp extraction_results/unifiedqa-t5-11b_normal_${seed}.csv extraction_results/uqa_good_${seed}.csv
