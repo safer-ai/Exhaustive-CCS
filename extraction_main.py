@@ -198,8 +198,17 @@ if __name__ == "__main__":
                 )
 
                 # save params except for KMeans
-                if method in ["TPC", "BSS"]:
-                    coef, bias = cmodel.coef_ @ pmodel.getDirection(), cmodel.intercept_
+                if method in ["TPC", "BSS", "CCS", "Random", "LR"]:
+                    if method in ["TPC", "BSS"]:
+                        coef, bias = cmodel.coef_ @ pmodel.getDirection(), cmodel.intercept_
+                    elif method in ["CCS", "Random"]:
+                        coef_and_bias = cmodel.best_theta
+                        coef = coef_and_bias[:, :-1]
+                        bias = coef_and_bias[:, -1]
+                    elif method == "LR":
+                        coef, bias = cmodel.coef_, cmodel.intercept_
+                    else:
+                        assert False
                     saveParams(
                         "{}_{}_{}_{}_{}_{}".format(model, global_prefix, method, "all", train_set, args.seed),
                         coef,
