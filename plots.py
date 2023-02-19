@@ -29,7 +29,7 @@ test_on_train_suffix = "\n(On the train set)" if test_on_train else ""
 
 
 def load_probs(model_name: str, train: str, test: str, method: Method = "CCS"):
-    folder = save_dir / f"states_{model_name}" / train
+    folder = save_dir / f"states_{model_name}_{method}" / train
     pattern = f"{test}*_{method}.csv" if test != "all" else f"*_{method}.csv"
     return pd.concat([pd.read_csv(f) for f in folder.glob(pattern)])
 

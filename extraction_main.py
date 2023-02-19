@@ -32,7 +32,17 @@ parser.add_argument("--prefix", nargs="+", default=["normal"], choices=registere
 parser.add_argument("--datasets", nargs="+", default=registered_dataset_list)
 parser.add_argument("--test", type=str, default="testall", choices=["testone", "testall"])
 parser.add_argument("--data_num", type=int, default=1000)
-parser.add_argument("--method_list", nargs="+", default=["0-shot", "TPC", "KMeans", "LR", "BSS", "CCS"])
+parser.add_argument(
+    "--method_list",
+    nargs="+",
+    default=["0-shot", "TPC", "KMeans", "LR", "BSS", "CCS"],
+    help=(
+        "The name of the method, which should either be in {0-shot, TPC, KMeans, LR, BSS, CCS, Random}\n"
+        "or be of the form RCCSi, where i is an integer: to run 10 iteration of RCCS, pass RCCS0, ..., RCCS9 as argument "
+        "(it should start by RCCS0). Stats will be saved for each iterations, "
+        "and params will be saved for their concatenation under 'RCCS'."
+    ),
+)
 parser.add_argument(
     "--mode", type=str, default="auto", choices=["auto", "minus", "concat"], help="How you combine h^+ and h^-."
 )
@@ -68,6 +78,10 @@ print("-------- args --------")
 for key in list(vars(args).keys()):
     print("{}: {}".format(key, vars(args)[key]))
 print("-------- args --------")
+
+
+def methodHasLoss(method):
+    return method in ["LR", "BSS", "CCS"] or method.startswith("RCCS")
 
 
 def saveParams(name, coef, intercept):
@@ -161,7 +175,9 @@ if __name__ == "__main__":
                 continue
             print("-------- method = {} --------".format(method))
 
-            mode = args.mode if args.mode != "auto" else ("minus" if method not in {"CCS", "Random"} else "concat")
+            method_use_concat = (method in {"CCS", "Random"}) or method.startswith("RCCS")
+
+            mode = args.mode if args.mode != "auto" else ("concat" if method_use_concat else "minus")
             # load the data_dict and permutation_dict
             data_dict, permutation_dict = getDic(
                 mdl_name=model,
@@ -183,7 +199,24 @@ if __name__ == "__main__":
 
                 # return a dict with the same shape as test_dict
                 # for each key test_dict[key] is a unitary list
-                save_file_prefix = f"{args.save_dir}/states_{args.model}/{train_set}" if args.save_states else None
+                save_file_prefix = (
+                    f"{args.save_dir}/states_{args.model}_{method}/{train_set}" if args.save_states else None
+                )
+
+                method_ = method
+                constraints = None
+                if method.startswith("RCCS"):
+                    method_ = "CCS"
+                    params_file_name = "{}_{}_{}_{}_{}_{}".format(
+                        model, global_prefix, "RCCS", "all", train_set, args.seed
+                    )
+                    if method != "RCCS0":
+                        constraints = np.load(
+                            os.path.join(args.save_dir, "params", "coef_{}.npy".format(params_file_name))
+                        )
+                        old_biases = np.load(
+                            os.path.join(args.save_dir, "params", "intercept_{}.npy".format(params_file_name))
+                        )
 
                 res, lss, pmodel, cmodel = mainResults(
                     data_dict=data_dict,
@@ -192,9 +225,10 @@ if __name__ == "__main__":
                     test_dict=test_dict,
                     n_components=n_components,
                     projection_method="PCA",
-                    classification_method=method,
+                    classification_method=method_,
                     save_file_prefix=save_file_prefix,
                     test_on_train=args.test_on_train,
+                    constraints=constraints,
                 )
 
                 # save params except for KMeans
@@ -214,6 +248,15 @@ if __name__ == "__main__":
                         coef,
                         bias,
                     )
+
+                if method.startswith("RCCS"):
+                    coef_and_bias = cmodel.best_theta
+                    coef = coef_and_bias[:, :-1]
+                    bias = coef_and_bias[:, -1]
+                    if method != "RCCS0":
+                        coef = np.concatenate([constraints, coef], axis=0)
+                        bias = np.concatenate([old_biases, bias], axis=0)
+                    saveParams(params_file_name, coef, bias)
 
                 acc, std, loss = (
                     getAvg(res),
@@ -240,7 +283,7 @@ if __name__ == "__main__":
                             std=np.std(res[key]),
                             location=args.location,
                             layer=args.layer,
-                            loss=np.mean(lss[key]) if method in ["CCS", "BSS"] else "",
+                            loss=np.mean(lss[key]) if methodHasLoss(method) else "",
                         )
                     else:
                         for idx in range(len(res[key])):
@@ -256,7 +299,7 @@ if __name__ == "__main__":
                                 std="",
                                 location=args.location,
                                 layer=args.layer,
-                                loss=lss[key][idx] if method in ["CCS", "BSS"] else "",
+                                loss=lss[key][idx] if methodHasLoss(method) else "",
                             )
 
         saveCsv(csv, global_prefix, "After finish {}".format(method))

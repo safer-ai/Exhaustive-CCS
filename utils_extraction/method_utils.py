@@ -95,11 +95,60 @@ def get_all_data(data_dict):
     return hs0, hs1, all_labels
 
 
+def project(x, along_directions):
+    """Project x along the along_directions.
+
+    x of shape (..., d) and along_directions of shape (n_directions, d)"""
+    if isinstance(x, torch.Tensor) and isinstance(along_directions, torch.Tensor):
+        inner_products = torch.einsum("...d,nd->...n", x, along_directions)
+        return x - torch.einsum("...n,nd->...d", inner_products, along_directions)
+    elif isinstance(x, np.ndarray) and isinstance(along_directions, np.ndarray):
+        inner_products = np.einsum("...d,nd->...n", x, along_directions)
+        return x - np.einsum("...n,nd->...d", inner_products, along_directions)
+    else:
+        raise ValueError(
+            "x and along_directions should be both torch.Tensor or np.ndarray"
+            f"Found {type(x)} and {type(along_directions)}"
+        )
+
+
+def project_coeff(coef_and_bias, along_directions):
+    if along_directions is None:
+        return coef_and_bias
+
+    new_coef = project(coef_and_bias[:, :-1], along_directions)
+    bias = coef_and_bias[:, -1]
+    if isinstance(coef_and_bias, torch.Tensor):
+        return torch.cat([new_coef, bias.unsqueeze(-1)], dim=-1)
+    elif isinstance(coef_and_bias, np.ndarray):
+        return np.concatenate([new_coef, bias[:, None]], axis=-1)
+    else:
+        raise ValueError("coef_and_bias should be either torch.Tensor or np.ndarray")
+
+
+def normalize(directions):
+    return directions / np.linalg.norm(directions, axis=-1, keepdims=True)
+
+
+def assert_close_to_orthonormal(directions, atol=1e-3):
+    assert np.allclose(directions @ directions.T, np.eye(directions.shape[0]), atol=atol), "Not orthonormal"
+
+
 class ConsistencyMethod(object):
-    def __init__(self, verbose=False, include_bias=True, no_train=False):
+    def __init__(self, verbose=False, include_bias=True, no_train=False, constraints=None):
+        """The main CCS class
+        verbose: whether to be verbose in train
+        include_bias: whether to include bias in the linear model
+        no_train: whether to train the linear model (otherwise just return randomly initialized weights)
+        constraints: an optional matrix of shape (n_directions, n_features)*
+            of unormalized but orthogonal directions which the linear model should be orthogonal to"""
         self.includa_bias = include_bias
         self.verbose = verbose
         self.no_train = no_train
+        self.constraints = constraints
+        if self.constraints is not None:
+            self.constraints = normalize(self.constraints)
+            assert_close_to_orthonormal(self.constraints)
 
     def add_ones_dimension(self, h):
         if self.includa_bias:
@@ -184,10 +233,17 @@ class ConsistencyMethod(object):
         else:
             init_theta = self.init_theta
 
+        init_theta = project_coeff(init_theta, self.constraints)
+
         if self.no_train:
             return init_theta, 0
 
         theta = torch.tensor(init_theta, dtype=torch.float, requires_grad=True, device=self.device)
+
+        if self.constraints is not None:
+            constraints_t = torch.tensor(self.constraints, dtype=torch.float, requires_grad=False, device=self.device)
+        else:
+            constraints_t = None
 
         # set up optimizer
         optimizer = torch.optim.AdamW([theta], lr=self.lr)
@@ -196,7 +252,8 @@ class ConsistencyMethod(object):
         for _ in range(self.nepochs):
 
             # project onto theta
-            z0, z1 = x0.mm(theta.T), x1.mm(theta.T)
+            theta_ = project_coeff(theta, constraints_t)
+            z0, z1 = x0.mm(theta_.T), x1.mm(theta_.T)
 
             # sigmoide to get probability
             p0, p1 = torch.sigmoid(z0), torch.sigmoid(z1)
@@ -211,6 +268,9 @@ class ConsistencyMethod(object):
 
             # with torch.no_grad():
             #     theta /= torch.norm(theta)
+
+            # no gradient manipulation here
+            theta.data = project_coeff(theta.data, constraints_t)
 
             theta_np = theta.cpu().detach().numpy().reshape(1, -1)
             # print("Norm of theta is " + str(np.linalg.norm(theta_np)))
@@ -519,6 +579,7 @@ def mainResults(
     learn_dict={},
     save_file_prefix=None,
     test_on_train=False,
+    constraints=None,
 ):
 
     start = time.time()
@@ -533,6 +594,8 @@ def mainResults(
     if classification_method == "Random":
         no_train = True
         classification_method = "CCS"
+    if classification_method != "CCS" and constraints is not None:
+        raise ValueError("constraints only supported for CCS")
 
     # use all data (not split) to do the PCA
     proj_states = getConcat([getConcat([data_dict[key][w][0] for w in lis]) for key, lis in projection_dict.items()])
@@ -545,7 +608,7 @@ def mainResults(
     # pairFunc = partial(getPair, data_dict = data_dict, permutation_dict = permutation_dict, projection_model = projection_model)
 
     if classification_method == "CCS":
-        classify_model = ConsistencyMethod(verbose=print_more, no_train=no_train)
+        classify_model = ConsistencyMethod(verbose=print_more, no_train=no_train, constraints=constraints)
         datas, label = getPair(
             data_dict=data_dict,
             permutation_dict=permutation_dict,
