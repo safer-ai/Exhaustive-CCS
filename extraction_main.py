@@ -39,8 +39,8 @@ parser.add_argument(
     help=(
         "The name of the method, which should either be in {0-shot, TPC, KMeans, LR, BSS, CCS, Random}\n"
         "or be of the form RCCSi, where i is an integer: to run 10 iteration of RCCS, pass RCCS0, ..., RCCS9 as argument "
-        "(it should start by RCCS0). Stats will be saved for each iterations, "
-        "and params will be saved for their concatenation under 'RCCS'."
+        "(it should start by RCCS0). Stats will be saved for each iterations as a separate experiment, "
+        "and the concatenation of probes' parameters will be saved as if you had run a method named `RCCS`.."
     ),
 )
 parser.add_argument(

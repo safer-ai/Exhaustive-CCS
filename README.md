@@ -1,43 +1,36 @@
-### Introduction
+# Discovering Latent Knowledge Without Supervision
 
-This code consists of two parts. First, you can use `generation_main.py` to calculate the zero-shot accuracy and generate hidden states. Second, you can use `extraction_main.py` to run our methods, `CCS`, `TPC` and `BSS`, to get final predictions and performance.
+This is a lighty edited version of the original [Discovering Latent Knowledge Without Supervision](https://arxiv.org/pdf/2212.03827.pdf) code, which is the zip file linked in the [Github Repo of the paper](https://github.com/collin-burns/discovering_latent_knowledge/).
 
+Both the Github repo and the zip file contain bugs, which are here fixed.
 
-### Dependencies
+## How to run
 
-Our code uses [PyTorch](http://pytorch.org) and [Huggingface Transformers](https://huggingface.co/docs/transformers/index). You will also need to install [promptsouce](https://github.com/bigscience-workshop/promptsource), a toolkit for NLP prompts. We tested our code on Python 3.8.
+- Install the required packages with `pip install -r requirements.txt`
+- Run the `source generate_all.sh` to generate the data (it might take >24h). Edit it if you want to generate only a subset of the data.
+- Run the `source extract_relevant.sh` to run all the experiments (it might take >24h too). Edit it if you want to run only a subset of the experiments.
+- Run `plots.py` as a Python notebook to generate the plots.
 
+## Additional modifications
 
-### Quick **Start**
+- Add a `"Random"` baseline (which is CCS but without any training)
+- Save the parameters of the probe for all methods
+- Add a `--save_states` flag to `extraction_main.py` which saves the probabilities and labels given by the runs.
+- Add a `--test_on_train` flag to `extraction_main.py` to measure train performance instead of test performance
+- Add a `requirements.txt` file to install the required packages, and scripts file for ease of use
+- Add a `plots.py` file to generate the plots
+- Rename `"Prob"`to `"CCS"`
+- Use HuggingFace's default cache
+- Add Recursive CCS (RCCS).
 
-1. To generate the hidden states for one model `mdl` and all datasets, run
+My aim was to make the diff easily readable, so I haven't done any refactor, major renamings, format changes, etc.
 
-```bash
-python generation_main.py --model mdl --swipe 
-```
+If you're not interested by Recursive CCS, you can use the `without-rccs` branch.
 
-To test `roberta` with the misleading prefix, and only the `imdb` and `amazon-polarity` datasets, while printing extra information, run:
+## Recursive CCS
 
+RCCS applies CCS multiple times, with the contraint that iteration n should find a probe which direction is orthogonal to the directions found by iterations 0, ..., n-1.
 
-```bash
-python generation_main.py --model roberta-large-mnli --prefix confusion --swipe --datasets imdb amazon-polarity --print_more
-```
-
-The name of prefix can be found in `./utils_generation/construct_prompts.py`. This command will save hidden states to `generation_results` and will save zero-shot accuracy to `generation_results/generation_results.csv`.
-
-1. To test our methods, run:
-
-```bash
-python extraction_main.py --model mdl --prefix normal
-```
-
-For the example above, you can run:
-
-```bash
-python extraction_main.py --model roberta-large-mnli --prefix confusion  --datasets imdb amazon-polarity
-```
-
-Once finished, results will be saved in `extraction_results/{model}_{prefix}_{seed}.csv`, and the direction (`coef`) will be saved in `extraction_results/params`.
-
+I wanted to make the diff still relatively small, so each iteration of RCCS is a separate experiment, which uses the parameters of the probes found by previous ones. To run 20 iteration of RCCS, pass RCCS0, ..., RCCS19 to `--method_list` (it should start by RCCS0). Stats will be saved for each iterations as a separate experiment, and the concatenation of probes' parameters will be saved as if you had run a method named `RCCS`.
 
 
