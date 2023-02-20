@@ -17,6 +17,7 @@ Both the Github repo and the zip file contain bugs, which are here fixed.
 - Save the parameters of the probe for all methods
 - Add a `--save_states` flag to `extraction_main.py` which saves the probabilities and labels given by the runs.
 - Add a `--test_on_train` flag to `extraction_main.py` to measure train performance instead of test performance
+- Add a `--project_along_mean_diff` flag to `extraction_main.py` to project the probe along the data along the difference of the mean of the two classes (for each train dataset).
 - Add a `requirements.txt` file to install the required packages, and scripts file for ease of use
 - Add a `plots.py` file to generate the plots
 - Rename `"Prob"`to `"CCS"`
