@@ -1,7 +1,6 @@
 # %%
 # imports
 from itertools import combinations
-from tkinter import SEPARATOR
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -351,6 +350,7 @@ cosines = np.array([
 ])
 plt.hist(cosines, bins=20)
 plt.xlabel("Cosine similarity")
+plt.xlim(0, 1)
 plt.title(f"Pairwise cosine similarities between directions on different seeds\nUQA, all datasets{TEST_ON_DIR_suffix}")
 # %%
 # Plot: histogram of cosines similarity between directions (copa)
@@ -360,6 +360,20 @@ cosines = np.array([
 ])
 plt.hist(cosines, bins=20)
 plt.xlabel("Cosine similarity")
+plt.xlim(0, 1)
 plt.title(f"Pairwise cosine similarities between directions on different seeds\nUQA, copa{TEST_ON_DIR_suffix}")
+# %%
+# Check cosine similarity of RCCS directions
+params = load_params(UQA, "all", "RCCS")["coefs"]
+all_cosines = []
+for coef_set in params:
+    cosines =[
+        abs(np.dot(p1, p2) / (np.linalg.norm(p1) * np.linalg.norm(p2))) for p1, p2 in combinations(coef_set, 2)
+    ]
+    all_cosines += cosines
+plt.hist(all_cosines, bins=20)
+plt.xlabel("Cosine similarity")
+plt.title(f"Pairwise cosine similarities between directions on iterations seeds\nUQA, all datasets{TEST_ON_DIR_suffix}")
+# Note: 1e_7, everything is fine
 
 # %%
