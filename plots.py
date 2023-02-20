@@ -12,34 +12,32 @@ from matplotlib import rcParams
 rcParams["figure.figsize"] = (8, 8)
 # %%
 # Constants
-save_dir = Path("extraction_results")
-test_on_train = False
+SAVE_DIR = Path("extraction_results")
+TEST_ON_DIR = False
 UQA = "unifiedqa-t5-11b"
 GPTJ = "gpt-j-6b"
-Method = Literal["CCS", "LR", "Random"]
-uqa_good_datasets = ["imdb", "amazon-polarity", "ag-news", "dbpedia-14", "copa", "boolq", "story-cloze"]
-gptj_good_datasets = ["imdb", "amazon-polarity", "ag-news", "dbpedia-14"]
+UQA_GOOD_DS = ["imdb", "amazon-polarity", "ag-news", "dbpedia-14", "copa", "boolq", "story-cloze"]
+GPTJ_GOOD_DS = ["imdb", "amazon-polarity", "ag-news", "dbpedia-14"]
 
 # derived constants
-if test_on_train:
-    save_dir = save_dir / "test_on_train"
-test_on_train_suffix = "\n(On the train set)" if test_on_train else ""
+if TEST_ON_DIR:
+    SAVE_DIR = SAVE_DIR / "TEST_ON_DIR"
+TEST_ON_DIR_suffix = "\n(On the train set)" if TEST_ON_DIR else ""
 # %%
 # Utils
 
 
-def load_probs(model_name: str, train: str, test: str, method: Method = "CCS"):
-    folder = save_dir / f"states_{model_name}_{method}" / train
+def load_probs(model_name: str, train: str, test: str, method: str = "CCS"):
+    folder = SAVE_DIR / f"states_{model_name}_{method}" / train
     pattern = f"{test}*_{method}.csv" if test != "all" else f"*_{method}.csv"
     return pd.concat([pd.read_csv(f) for f in folder.glob(pattern)])
 
-
-def load_stats(model_name: str, train: str, test: str, method: Method = "CCS"):
+def load_stats(model_name: str, train: str, test: str, method: str = "CCS"):
     model_short = {
         UQA: "uqa",
         GPTJ: "gptj",
     }[model_name]
-    csvs = save_dir.glob(f"{model_short}_good_*.csv")
+    csvs = SAVE_DIR.glob(f"{model_short}_good_*.csv")
     dfs = [pd.read_csv(f) for f in csvs]
     # Filter by train & method
     dfs = [df[(df["train"] == train) & (df["method"] == method)] for df in dfs]
@@ -72,7 +70,7 @@ minp = np.minimum(p0, p1)
 maxp = np.maximum(p0, p1)
 plt.hist(minp, bins=30, alpha=0.5, label="min(p+,p-)", range=(0, 1))
 plt.hist(maxp, bins=30, alpha=0.5, label="max(p+,p-)", range=(0, 1))
-plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nCOPA, UQA, CCS{test_on_train_suffix}")
+plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nCOPA, UQA, CCS{TEST_ON_DIR_suffix}")
 plt.legend()
 plt.tight_layout()
 # %%
@@ -83,12 +81,12 @@ minp = np.minimum(p0, p1)
 maxp = np.maximum(p0, p1)
 plt.hist(minp, bins=30, alpha=0.5, label="min(p+,p-)", range=(0, 1))
 plt.hist(maxp, bins=30, alpha=0.5, label="max(p+,p-)", range=(0, 1))
-plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nAll datasets, UQA, CCS{test_on_train_suffix}")
+plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nAll datasets, UQA, CCS{TEST_ON_DIR_suffix}")
 plt.legend()
 plt.tight_layout()
 # %%
 # Plot 1.3 barchart of losses with CCS
-bar_names = uqa_good_datasets
+bar_names = UQA_GOOD_DS
 separate_losses = [load_stats(UQA, d, d, "CCS")["loss"] for d in bar_names]
 together_losses = [load_stats(UQA, "all", d, "CCS")["loss"] for d in bar_names]
 
@@ -109,13 +107,13 @@ plt.bar(x_pos + width / 2, together_mean, width, label="train together", yerr=to
 plt.xticks(x_pos, bar_names, rotation=45)
 plt.axhline(0.2, color="black", label="loss for constant guess")
 plt.title(
-    f"Losses of UQA on all datasets\ntrained separately vs. trained together\n(2 std error bars over 5 runs){test_on_train_suffix}"
+    f"Losses of UQA on all datasets\ntrained separately vs. trained together\n(2 std error bars over 5 runs){TEST_ON_DIR_suffix}"
 )
 plt.legend()
 plt.tight_layout()
 # %%
 # Plot 1.4 barchart of accuracies
-bar_names = uqa_good_datasets
+bar_names = UQA_GOOD_DS
 lr_accs = [load_stats(UQA, d, d, "LR")["accuracy"] for d in bar_names]
 separate_accs = [load_stats(UQA, d, d, "CCS")["accuracy"] for d in bar_names]
 together_accs = [load_stats(UQA, "all", d, "CCS")["accuracy"] for d in bar_names]
@@ -147,7 +145,7 @@ plt.errorbar(x_pos + 3 * width / 2, random_mean, label="Random", yerr=random_err
 plt.xticks(x_pos, bar_names, rotation=45)
 plt.ylim(0.5, 1)
 plt.title(
-    f"Accuracies of UQA on all datasets\ntrained separately vs. trained together vs random directions\n(2 std error bars over 5 runs){test_on_train_suffix}"
+    f"Accuracies of UQA on all datasets\ntrained separately vs. trained together vs random directions\n(2 std error bars over 5 runs){TEST_ON_DIR_suffix}"
 )
 plt.legend()
 plt.tight_layout()
@@ -159,7 +157,7 @@ minp = np.minimum(p, 1 - p)
 maxp = np.maximum(p, 1 - p)
 plt.hist(minp, bins=30, alpha=0.5, label="min(p,1-p)", range=(0, 1))
 plt.hist(maxp, bins=30, alpha=0.5, label="max(p,1-p)", range=(0, 1))
-plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nAll datasets, UQA, LR{test_on_train_suffix}")
+plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nAll datasets, UQA, LR{TEST_ON_DIR_suffix}")
 plt.legend()
 plt.tight_layout()
 # %%
@@ -170,7 +168,7 @@ minp = np.minimum(p0, p1)
 maxp = np.maximum(p0, p1)
 plt.hist(minp, bins=30, alpha=0.5, label="min(p+,p-)", range=(0, 1))
 plt.hist(maxp, bins=30, alpha=0.5, label="max(p+,p-)", range=(0, 1))
-plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nAll datasets, UQA, CCS{test_on_train_suffix}")
+plt.title(f"Distribution of min(p+,p-) and max(p+,p-)\nAll datasets, UQA, CCS{TEST_ON_DIR_suffix}")
 plt.legend()
 plt.tight_layout()
 # %%
@@ -183,7 +181,7 @@ plt.tight_layout()
 # Plot 2.4 RCCS loss across iterations (but on copa)
 # %%
 # Plot 3.1 barchart of losses on GPT-J
-bar_names = gptj_good_datasets
+bar_names = GPTJ_GOOD_DS
 separate_losses = [load_stats(GPTJ, d, d, "CCS")["loss"] for d in bar_names]
 together_losses = [load_stats(GPTJ, "all", d, "CCS")["loss"] for d in bar_names]
 
@@ -204,13 +202,13 @@ plt.bar(x_pos + width / 2, together_mean, width, label="train together", yerr=to
 plt.xticks(x_pos, bar_names, rotation=45)
 plt.axhline(0.2, color="black", label="loss for constant guess")
 plt.title(
-    f"Losses of GPTJ on all datasets\ntrained separately vs. trained together\n(2 std error bars over 10 runs){test_on_train_suffix}"
+    f"Losses of GPTJ on all datasets\ntrained separately vs. trained together\n(2 std error bars over 10 runs){TEST_ON_DIR_suffix}"
 )
 plt.legend()
 plt.tight_layout()
 # %%
 # Plot 3.2 barchart of accuracies on GPT-J
-bar_names = gptj_good_datasets
+bar_names = GPTJ_GOOD_DS
 lr_accs = [load_stats(GPTJ, d, d, "LR")["accuracy"] for d in bar_names]
 separate_accs = [load_stats(GPTJ, d, d, "CCS")["accuracy"] for d in bar_names]
 together_accs = [load_stats(GPTJ, "all", d, "CCS")["accuracy"] for d in bar_names]
@@ -242,7 +240,7 @@ plt.errorbar(x_pos + 3 * width / 2, random_mean, label="Random", yerr=random_err
 plt.xticks(x_pos, bar_names, rotation=45)
 plt.ylim(0.5, 1)
 plt.title(
-    f"Accuracies of GPTJ on all datasets\ntrained separately vs. trained together vs random directions\n(2 std error bars over 10 runs){test_on_train_suffix}"
+    f"Accuracies of GPTJ on all datasets\ntrained separately vs. trained together vs random directions\n(2 std error bars over 10 runs){TEST_ON_DIR_suffix}"
 )
 plt.legend()
 plt.tight_layout()
