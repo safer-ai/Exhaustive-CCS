@@ -46,11 +46,11 @@ RCCS_STRING=$(printf "RCCS%s " $(seq 0 19))
 
 # Extract UQA states (once)
 python extraction_main.py --model unifiedqa-t5-11b --datasets imdb amazon-polarity ag-news dbpedia-14 copa boolq story-cloze --method_list $RCCS_STRING  --save_states --seed 0
-cp extraction_results/unifiedqa-t5-11b_normal_0.csv extraction_results/uqa_good_rccs_0.csv
+cp extraction_results/unifiedqa-t5-11b_normal_0.csv extraction_results/uqa_goodrccs_0.csv
 
 # Extract UQA on datasets where it is good
 for seed in {1..9}; do
     python extraction_main.py --model unifiedqa-t5-11b --datasets imdb amazon-polarity ag-news dbpedia-14 copa boolq story-cloze --method_list $RCCS_STRING --seed $seed
     # copy the csv file so that it doesn't get overwritten
-    cp extraction_results/unifiedqa-t5-11b_normal_${seed}.csv extraction_results/uqa_good_rccs_${seed}.csv
+    cp extraction_results/unifiedqa-t5-11b_normal_${seed}.csv extraction_results/uqa_goodrccs_${seed}.csv
 done
