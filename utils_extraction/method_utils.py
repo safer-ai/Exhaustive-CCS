@@ -562,6 +562,18 @@ print(
 )
 
 
+def project_data_along_axis(data, labels):
+    # data: (n_samples, n_features)
+    assert data.shape[0] == labels.shape[0]
+    assert len(data.shape) == 2
+    mean0 = np.mean(data[labels == 0], axis=0)
+    mean1 = np.mean(data[labels == 1], axis=0)
+    mean_diff = mean1 - mean0
+    mean_diff /= np.linalg.norm(mean_diff)
+    mean_diff = mean_diff.reshape(1, -1)
+    return project(data, mean_diff)
+
+
 def mainResults(
     # dict of hidden states, key is set_name, each value is a list with len = #promp_idx
     data_dict,
@@ -577,9 +589,10 @@ def mainResults(
     classification_method="BSS",  # can be LR, TPC and BSS
     print_more=False,
     learn_dict={},
-    save_file_prefix=None,
-    test_on_train=False,
-    constraints=None,
+    save_file_prefix=None,  # if not None, will save the prediction to "{save_file_prefix}/{test_set}{prompt_idx}_{method}.csv"
+    test_on_train=False,  # if true, will use the train set to test the model
+    constraints=None,  # if not None, will use the constraints to do the projection (CCS only)
+    project_along_mean_diff=False,  # if true, will project the data along the mean difference of the two classes
 ):
 
     start = time.time()
@@ -616,6 +629,8 @@ def mainResults(
             target_dict=projection_dict,
         )
         assert len(datas.shape) == 2
+        if project_along_mean_diff:
+            datas = project_data_along_axis(datas, label)
         data = [datas[:, : datas.shape[1] // 2], datas[:, datas.shape[1] // 2 :]]
         classify_model.fit(data=data, label=label, **learn_dict)
 
@@ -628,6 +643,9 @@ def mainResults(
         # ))
 
     elif classification_method == "BSS":
+        if project_along_mean_diff:
+            raise ValueError("BSS does not support project_along_mean_diff")
+
         lis = [
             getPair(
                 data_dict=data_dict,
@@ -646,14 +664,17 @@ def mainResults(
 
     else:
         classify_model = myClassifyModel(method=classification_method, print_more=print_more)
-        classify_model.fit(
-            *getPair(
-                data_dict=data_dict,
-                permutation_dict=permutation_dict,
-                projection_model=projection_model,
-                target_dict=projection_dict,
-            )
+
+        data, labels = getPair(
+            data_dict=data_dict,
+            permutation_dict=permutation_dict,
+            projection_model=projection_model,
+            target_dict=projection_dict,
         )
+        if project_along_mean_diff:
+            data = project_data_along_axis(data, labels)
+
+        classify_model.fit(data, labels)
 
     res, lss = {}, {}
     for key, lis in test_dict.items():
@@ -670,6 +691,9 @@ def mainResults(
                 target_dict=dic,
                 split=("train" if test_on_train else "test"),
             )
+
+            if project_along_mean_diff:
+                data = project_data_along_axis(data, label)
 
             method = classification_method if not no_train else "Random"
             if classification_method == "CCS":

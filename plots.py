@@ -14,7 +14,7 @@ rcParams["figure.figsize"] = (8, 8)
 # %%
 # Constants
 SAVE_DIR = Path("extraction_results")
-TEST_ON_DIR = False
+TEST_ON_TRAIN = False
 UQA = "unifiedqa-t5-11b"
 GPTJ = "gpt-j-6b"
 UQA_GOOD_DS = ["imdb", "amazon-polarity", "ag-news", "dbpedia-14", "copa", "boolq", "story-cloze"]
@@ -29,9 +29,9 @@ MAX_COL = "red"
 MIN_COL = "purple"
 
 # derived constants
-if TEST_ON_DIR:
-    SAVE_DIR = SAVE_DIR / "TEST_ON_DIR"
-TEST_ON_DIR_suffix = "\n(On the train set)" if TEST_ON_DIR else ""
+if TEST_ON_TRAIN:
+    SAVE_DIR = SAVE_DIR / "test_on_train"
+TEST_ON_DIR_suffix = "\n(On the train set)" if TEST_ON_TRAIN else ""
 # %%
 # Utils
 
@@ -215,6 +215,9 @@ plt.tight_layout()
 # %%
 # Plot: RCCS accuracies across iterations
 def plot_rccs_accs(ds):
+    if TEST_ON_TRAIN:
+        return
+    
     separate_accs = load_rccs_stats(UQA, ds, ds)["accuracy"]
     together_accs = load_rccs_stats(UQA, "all", ds)["accuracy"]
 
@@ -246,6 +249,8 @@ plot_rccs_accs("all")
 # %%
 # Plot: RCCS loss across iterations
 def plot_rccs_loss(ds):
+    if TEST_ON_TRAIN:
+        return
     separate_losses = load_rccs_stats(UQA, ds, ds)["loss"]
     together_losses = load_rccs_stats(UQA, "all", ds)["loss"]
     
@@ -376,4 +381,73 @@ plt.xlabel("Cosine similarity")
 plt.title(f"Pairwise cosine similarities between directions on iterations seeds\nUQA, all datasets{TEST_ON_DIR_suffix}")
 # Note: 1e_7, everything is fine
 
+# %%
+# Plot: barchart of accuracies with mean difference projection
+bar_names = UQA_GOOD_DS
+lr_accs = [load_stats(UQA, d, d, "LR-md")["accuracy"] for d in bar_names]
+separate_accs = [load_stats(UQA, d, d, "CCS-md")["accuracy"] for d in bar_names]
+together_accs = [load_stats(UQA, "all", d, "CCS-md")["accuracy"] for d in bar_names]
+random_accs = [load_stats(UQA, d, d, "Random-md")["accuracy"] for d in bar_names]
+
+
+def get_mean_and_error(accs):
+    means = np.mean(accs, axis=1)
+    stds = np.std(accs, axis=1)
+    return means, 2 * stds
+
+
+lr_mean, lr_error = get_mean_and_error(lr_accs)
+separate_mean, separate_error = get_mean_and_error(separate_accs)
+together_mean, together_error = get_mean_and_error(together_accs)
+random_mean, random_error = get_mean_and_error(random_accs)
+
+x_pos = np.arange(len(bar_names))
+width = 0.2
+kwargs = {
+    "capsize": 3,
+    "marker": ".",
+    "linestyle": "none",
+}
+plt.errorbar(x_pos - 3 * width / 2, lr_mean, label="Supervised", yerr=lr_error, color=LR_COL, **kwargs)
+plt.errorbar(x_pos - width / 2, separate_mean, label="CCS", yerr=separate_error, color=SEPARATE_COL, **kwargs)
+plt.errorbar(
+    x_pos + width / 2, together_mean, label="CCS, trained together", yerr=together_error, color=TOGETHER_COL, **kwargs
+)
+plt.errorbar(x_pos + 3 * width / 2, random_mean, label="Random", yerr=random_error, color=RANDOM_COL, **kwargs)
+plt.xticks(x_pos, bar_names, rotation=45)
+plt.ylim(0.5, 1)
+plt.title(
+    f"Accuracies of UQA on all datasets after mean difference projection\ntrained separately vs. trained together vs random directions\n(2 std error bars over 10 runs){TEST_ON_DIR_suffix}"
+)
+plt.legend()
+plt.tight_layout()
+#%%
+# Plot: barchart of losses with CCS with mean difference projection
+
+bar_names = UQA_GOOD_DS
+separate_losses = [load_stats(UQA, d, d, "CCS-md")["loss"] for d in bar_names]
+together_losses = [load_stats(UQA, "all", d, "CCS-md")["loss"] for d in bar_names]
+
+
+def get_mean_and_error(losses):
+    means = np.mean(losses, axis=1)
+    stds = np.std(losses, axis=1)
+    return means, 2 * stds
+
+
+separate_mean, separate_error = get_mean_and_error(separate_losses)
+together_mean, together_error = get_mean_and_error(together_losses)
+
+x_pos = np.arange(len(bar_names))
+width = 0.35
+plt.bar(x_pos - width / 2, separate_mean, width, label="train separate", yerr=separate_error, color=SEPARATE_COL)
+plt.bar(x_pos + width / 2, together_mean, width, label="train together", yerr=together_error, color=TOGETHER_COL)
+plt.xticks(x_pos, bar_names, rotation=45)
+plt.axhline(0.2, color="black", label="loss for constant guess")
+plt.axhline(0, color="lightgray")
+plt.title(
+    f"Losses of UQA on all datasets\ntrained separately vs. trained together\n(2 std error bars over 10 runs){TEST_ON_DIR_suffix}"
+)
+plt.legend()
+plt.tight_layout()
 # %%

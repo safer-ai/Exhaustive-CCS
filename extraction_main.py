@@ -61,6 +61,11 @@ parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--prompt_save_level", default="all", choices=["single", "all"])
 parser.add_argument("--save_states", action="store_true", help="Whether to save the p0, p1, labels.")
 parser.add_argument("--test_on_train", action="store_true", help="Whether to test on the train set.")
+parser.add_argument(
+    "--project_along_mean_diff",
+    action="store_true",
+    help="Whether to project the data along the difference of means. You can also use the suffix -md in the method name.",
+)
 args = parser.parse_args()
 
 dataset_list = args.datasets
@@ -174,6 +179,15 @@ if __name__ == "__main__":
             if method == "0-shot":
                 continue
             print("-------- method = {} --------".format(method))
+            
+            project_along_mean_diff = "-md" in method or args.project_along_mean_diff
+            if project_along_mean_diff:
+                method = method.replace("-md", "")
+
+            def maybeAppendProjectSuffix(method):
+                if project_along_mean_diff:
+                    return method + "-md"
+                return method
 
             method_use_concat = (method in {"CCS", "Random"}) or method.startswith("RCCS")
 
@@ -200,7 +214,9 @@ if __name__ == "__main__":
                 # return a dict with the same shape as test_dict
                 # for each key test_dict[key] is a unitary list
                 save_file_prefix = (
-                    f"{args.save_dir}/states_{args.model}_{method}/{train_set}" if args.save_states else None
+                    f"{args.save_dir}/states_{args.model}_{maybeAppendProjectSuffix(method)}/{train_set}"
+                    if args.save_states
+                    else None
                 )
 
                 method_ = method
@@ -208,7 +224,7 @@ if __name__ == "__main__":
                 if method.startswith("RCCS"):
                     method_ = "CCS"
                     params_file_name = "{}_{}_{}_{}_{}_{}".format(
-                        model, global_prefix, "RCCS", "all", train_set, args.seed
+                        model, global_prefix, maybeAppendProjectSuffix("RCCS"), "all", train_set, args.seed
                     )
                     if method != "RCCS0":
                         constraints = np.load(
@@ -229,6 +245,7 @@ if __name__ == "__main__":
                     save_file_prefix=save_file_prefix,
                     test_on_train=args.test_on_train,
                     constraints=constraints,
+                    project_along_mean_diff=project_along_mean_diff,
                 )
 
                 # save params except for KMeans
@@ -244,7 +261,9 @@ if __name__ == "__main__":
                     else:
                         assert False
                     saveParams(
-                        "{}_{}_{}_{}_{}_{}".format(model, global_prefix, method, "all", train_set, args.seed),
+                        "{}_{}_{}_{}_{}_{}".format(
+                            model, global_prefix, maybeAppendProjectSuffix(method), "all", train_set, args.seed
+                        ),
                         coef,
                         bias,
                     )
@@ -265,7 +284,7 @@ if __name__ == "__main__":
                 )
                 print(
                     "method = {:8}, prompt_level = {:8}, train_set = {:20}, avgacc is {:.2f}, std is {:.2f}, loss is {:.4f}".format(
-                        method, "all", train_set, 100 * acc, 100 * std, loss
+                        maybeAppendProjectSuffix(method), "all", train_set, 100 * acc, 100 * std, loss
                     )
                 )
 
@@ -275,7 +294,7 @@ if __name__ == "__main__":
                             csv,
                             model,
                             global_prefix,
-                            method,
+                            maybeAppendProjectSuffix(method),
                             "all",
                             train_set,
                             key,
@@ -291,7 +310,7 @@ if __name__ == "__main__":
                                 csv,
                                 model,
                                 global_prefix,
-                                method,
+                                maybeAppendProjectSuffix(method),
                                 idx,
                                 train_set,
                                 key,
@@ -302,4 +321,4 @@ if __name__ == "__main__":
                                 loss=lss[key][idx] if methodHasLoss(method) else "",
                             )
 
-        saveCsv(csv, global_prefix, "After finish {}".format(method))
+        saveCsv(csv, global_prefix, "After finish {}".format(maybeAppendProjectSuffix(method)))
