@@ -81,7 +81,7 @@ print("-------- args --------")
 
 
 def methodHasLoss(method):
-    return method in ["LR", "BSS", "CCS"] or method.startswith("RCCS")
+    return method in ["BSS", "CCS"] or method.startswith("RCCS")
 
 
 def saveParams(name, coef, intercept):
