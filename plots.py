@@ -11,6 +11,7 @@ from typing import Literal, Optional
 from matplotlib import rcParams
 
 rcParams["figure.figsize"] = (8, 8)
+plt.style.use('ggplot')
 # %%
 # Constants
 SAVE_DIR = Path("extraction_results")
@@ -448,6 +449,18 @@ plt.axhline(0, color="lightgray")
 plt.title(
     f"Losses of UQA on all datasets\ntrained separately vs. trained together\n(2 std error bars over 10 runs){TEST_ON_DIR_suffix}"
 )
+plt.legend()
+plt.tight_layout()
+# %%
+# Plot: distribution of True & False
+probs = load_probs(UQA, "copa", "copa", "CCS")
+p0, p1, labels = probs.values.T
+p = (p1 + (1 - p0)) / 2
+true = p[labels == 1]
+false = p[labels == 0]
+plt.hist(true, bins=30, alpha=0.5, label="True", range=(0, 1))
+plt.hist(false, bins=30, alpha=0.5, label="False", range=(0, 1))
+plt.title(f"p = (p+ + 1 - p-)/2\nCOPA, UQA, CCS{TEST_ON_DIR_suffix}")
 plt.legend()
 plt.tight_layout()
 # %%
