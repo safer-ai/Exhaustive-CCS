@@ -1,4 +1,3 @@
-from typing import Optional
 import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -11,7 +10,7 @@ from utils_extraction.load_utils import getDic, set_load_dir, get_zeros_acc
 from utils_extraction.method_utils import mainResults
 from utils_extraction.func_utils import getAvg, adder
 import pandas as pd
-import random
+import random 
 import json
 import argparse
 
@@ -27,37 +26,28 @@ models_layer_num = global_dict["models_layer_num"]
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", type=str, choices=registered_models)
-parser.add_argument("--prefix", nargs="+", default=["normal"], choices=registered_prefix)
-parser.add_argument("--datasets", nargs="+", default=registered_dataset_list)
-parser.add_argument("--test", type=str, default="testall", choices=["testone", "testall"])
-parser.add_argument("--data_num", type=int, default=1000)
-parser.add_argument("--method_list", nargs="+", default=["0-shot", "TPC", "KMeans", "LR", "BSS", "CCS"])
-parser.add_argument(
-    "--mode", type=str, default="auto", choices=["auto", "minus", "concat"], help="How you combine h^+ and h^-."
-)
-parser.add_argument("--save_dir", type=str, default="extraction_results", help="where the csv and params are saved")
-parser.add_argument("--append", action="store_true", help="Whether to append content in frame rather than rewrite.")
-parser.add_argument(
-    "--load_dir",
-    type=str,
-    default="generation_results",
-    help="Where the hidden states and zero-shot accuracy are loaded.",
-)
-parser.add_argument("--location", type=str, default="auto")
-parser.add_argument("--layer", type=int, default=-1)
-parser.add_argument("--zero", type=str, default="generation_results")
-parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--prompt_save_level", default="all", choices=["single", "all"])
+parser.add_argument("--model", type = str, choices=registered_models)
+parser.add_argument("--prefix", nargs="+", detaulf = ["normal"], choices = registered_prefix)
+parser.add_argument("--datasets", nargs="+", default = registered_dataset_list)
+parser.add_argument("--test", type = str, default = "testall", choices = ["testone", "testall"])
+parser.add_argument("--data_num", type = int, default = 1000)
+parser.add_argument("--method_list", nargs="+", default = ["0-shot", "TPC", "KMeans", "LR", "BSS", "Prob"])
+parser.add_argument("--mode", type = str, default = "auto", choices = ["auto", "minus", "concat"], help = "How you combine h^+ and h^-.")
+parser.add_argument("--save_dir", type = str, default = "extraction_results", help = "where the csv and params are saved")
+parser.add_argument("--append", action="store_true", help = "Whether to append content in frame rather than rewrite.")
+parser.add_argument("--load_dir", type = str, default = "generation_results", help = "Where the hidden states and zero-shot accuracy are loaded.")
+parser.add_argument("--location", type = str, default = "auto")
+parser.add_argument("--layer", type = int, default = -1)
+parser.add_argument("--zero", type = str, default = "generation_results")
+parser.add_argument("--seed", type = int, default = 0)
+parser.add_argument("--prompt_save_level", default = "all", choices = ["single", "all"])
 parser.add_argument("--save_states", action="store_true", help="Whether to save the p0, p1, labels.")
 parser.add_argument("--test_on_train", action="store_true", help="Whether to test on the train set.")
 args = parser.parse_args()
 
 dataset_list = args.datasets
 set_load_dir(args.load_dir)
-assert args.test != "testone", NotImplementedError(
-    "Current extraction program does not support applying method on prompt-specific level."
-)
+assert args.test != "testone", NotImplementedError("Current extraction program does not support applying method on prompt-specific level.")
 
 if args.location == "auto":
     args.location = "decoder" if "gpt" in args.model else "encoder"
@@ -70,16 +60,18 @@ for key in list(vars(args).keys()):
 print("-------- args --------")
 
 
+
+
 def saveParams(name, coef, intercept):
     path = os.path.join(args.save_dir, "params")
     np.save(os.path.join(path, "coef_{}.npy".format(name)), coef)
     np.save(os.path.join(path, "intercept_{}.npy".format(name)), intercept)
 
-
-def saveCsv(csv, prefix, str=""):
+def saveCsv(csv, prefix, str = ""):
     dir = os.path.join(args.save_dir, "{}_{}_{}.csv".format(args.model, prefix, args.seed))
-    csv.to_csv(dir, index=False)
+    csv.to_csv(dir, index = False)
     print("{} Saving to {} at {}".format(str, dir, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+
 
 
 if __name__ == "__main__":
@@ -89,9 +81,10 @@ if __name__ == "__main__":
     if not os.path.exists(os.path.join(args.save_dir, "params")):
         os.makedirs(os.path.join(args.save_dir, "params"), exist_ok=True)
 
+
     # each loop will generate a csv file
     for global_prefix in args.prefix:
-        print("---------------- model = {}, prefix = {} ----------------".format(args.model, global_prefix))
+        print("---------------- model = {}, prefix = {} ----------------".format(args.model, global_prefix) )
         # Set the random seed, in which case the permutation_dict will be the same
         random.seed(args.seed)
         np.random.seed(args.seed)
@@ -99,13 +92,11 @@ if __name__ == "__main__":
         # shorten the name
         model = args.model
         data_num = args.data_num
-
+    
         # Start calculate numbers
         # std is over all prompts within this dataset
         if not args.append:
-            csv = pd.DataFrame(
-                columns=["model", "prefix", "method", "prompt_level", "train", "test", "accuracy", "std"]
-            )
+            csv = pd.DataFrame(columns = ["model", "prefix", "method", "prompt_level", "train", "test", "accuracy", "std"])
         else:
             dir = os.path.join(args.save_dir, "{}_{}_{}.csv".format(args.model, global_prefix, args.seed))
             csv = pd.read_csv(dir)
@@ -116,43 +107,23 @@ if __name__ == "__main__":
             rawzeros = pd.read_csv(os.path.join(args.load_dir, "{}.csv".format(args.zero)))
             # Get the global zero acc dict (setname, [acc])
             zeros_acc = get_zeros_acc(
-                csv_name=args.zero,
-                mdl_name=model,
-                dataset_list=dataset_list,
-                prefix=global_prefix,
+                csv_name = args.zero,
+                mdl_name = model,
+                dataset_list = dataset_list,
+                prefix = global_prefix,
             )
             for setname in dataset_list:
                 if args.prompt_save_level == "all":
-                    csv = adder(
-                        csv,
-                        model,
-                        global_prefix,
-                        "0-shot",
-                        "",
-                        "",
-                        setname,
-                        np.mean(zeros_acc[setname]),
-                        np.std(zeros_acc[setname]),
-                        "",
-                        "",
-                        "",
-                    )
-                else:  # For each prompt, save one line
+                    csv = adder(csv, model, global_prefix, "0-shot", "", "", setname, 
+                            np.mean(zeros_acc[setname]),
+                            np.std(zeros_acc[setname]),"","","")
+                else:   # For each prompt, save one line
                     for idx in range(len(zeros_acc[setname])):
-                        csv = adder(
-                            csv,
-                            model,
-                            global_prefix,
-                            "0-shot",
-                            prompt_level=idx,
-                            train="",
-                            test=setname,
-                            accuracy=zeros_acc[setname][idx],
-                            std="",
-                            location="",
-                            layer="",
-                            loss="",
-                        )
+                        csv = adder(csv, model, global_prefix, "0-shot", 
+                                    prompt_level= idx, train= "", test = setname,
+                                    accuracy = zeros_acc[setname][idx],
+                                    std = "", location = "", layer = "", loss = "")
+
 
             saveCsv(csv, global_prefix, "After calculating zeroshot performance.")
 
@@ -164,12 +135,12 @@ if __name__ == "__main__":
             mode = args.mode if args.mode != "auto" else ("minus" if method not in {"CCS", "Random"} else "concat")
             # load the data_dict and permutation_dict
             data_dict, permutation_dict = getDic(
-                mdl_name=model,
+                mdl_name= model, 
                 dataset_list=dataset_list,
-                prefix=global_prefix,
-                location=args.location,
-                layer=args.layer,
-                mode=mode,
+                prefix = global_prefix,
+                location = args.location,
+                layer = args.layer,
+                mode = mode
             )
 
             test_dict = {key: range(len(data_dict[key])) for key in dataset_list}
@@ -186,13 +157,13 @@ if __name__ == "__main__":
                 save_file_prefix = f"{args.save_dir}/states_{args.model}/{train_set}" if args.save_states else None
 
                 res, lss, pmodel, cmodel = mainResults(
-                    data_dict=data_dict,
-                    permutation_dict=permutation_dict,
-                    projection_dict=projection_dict,
-                    test_dict=test_dict,
-                    n_components=n_components,
-                    projection_method="PCA",
-                    classification_method=method,
+                    data_dict = data_dict, 
+                    permutation_dict = permutation_dict, 
+                    projection_dict = projection_dict,
+                    test_dict = test_dict, 
+                    n_components = n_components, 
+                    projection_method = "PCA",
+                    classification_method = method,
                     save_file_prefix=save_file_prefix,
                     test_on_train=args.test_on_train,
                 )
@@ -215,48 +186,29 @@ if __name__ == "__main__":
                         bias,
                     )
 
-                acc, std, loss = (
-                    getAvg(res),
-                    np.mean([np.std(lis) for lis in res.values()]),
-                    np.mean([np.mean(lis) for lis in lss.values()]),
-                )
-                print(
-                    "method = {:8}, prompt_level = {:8}, train_set = {:20}, avgacc is {:.2f}, std is {:.2f}, loss is {:.4f}".format(
-                        method, "all", train_set, 100 * acc, 100 * std, loss
-                    )
-                )
+                acc, std, loss = getAvg(res), np.mean([np.std(lis) for lis in res.values()]), np.mean([np.mean(lis) for lis in lss.values()])
+                print("method = {:8}, prompt_level = {:8}, train_set = {:20}, avgacc is {:.2f}, std is {:.2f}, loss is {:.4f}".format(
+                    method, "all", train_set, 100 * acc, 100 * std, loss))
 
                 for key in dataset_list:
                     if args.prompt_save_level == "all":
-                        csv = adder(
-                            csv,
-                            model,
-                            global_prefix,
-                            method,
-                            "all",
-                            train_set,
-                            key,
-                            accuracy=np.mean(res[key]),
-                            std=np.std(res[key]),
-                            location=args.location,
-                            layer=args.layer,
-                            loss=np.mean(lss[key]) if method in ["CCS", "BSS"] else "",
-                        )
+                        csv = adder(csv, model, global_prefix, method, "all", train_set, key,
+                                    accuracy = np.mean(res[key]),
+                                    std = np.std(res[key]),
+                                    location = args.location,
+                                    layer = args.layer,
+                                    loss = np.mean(lss[key]) if method in ["CCS", "BSS"] else ""
+                                    )
                     else:
                         for idx in range(len(res[key])):
-                            csv = adder(
-                                csv,
-                                model,
-                                global_prefix,
-                                method,
-                                idx,
-                                train_set,
-                                key,
-                                accuracy=res[key][idx],
-                                std="",
-                                location=args.location,
-                                layer=args.layer,
-                                loss=lss[key][idx] if method in ["CCS", "BSS"] else "",
-                            )
+                            csv = adder(csv, model, global_prefix, method, idx, train_set, key,
+                                        accuracy = res[key][idx],
+                                        std = "",
+                                        location = args.location,
+                                        layer = args.layer,
+                                        loss = lss[key][idx] if method in ["CCS", "BSS"] else ""
+                                        )
 
         saveCsv(csv, global_prefix, "After finish {}".format(method))
+
+    
