@@ -139,9 +139,8 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
                             hidden_states_paired = [
                                 model(input_ids, labels=ans, output_hidden_states=True).decoder_hidden_states for ans in ans_token]
                     elif "gpt" in mdl_name or "bert" in mdl_name:
-                        appender = ""
                         ids_paired = [tokenize(getDataPoint(
-                            frame, idx, w) + appender) for w in ["0", "1"]]
+                            frame, idx, w)) for w in ["0", "1"]]
                         # Notice that since gpt and bert only have either decoder or encoder, we don't need to specify which one to use.
                         hidden_states_paired = [
                             model(ids, output_hidden_states=True).hidden_states for ids in ids_paired]

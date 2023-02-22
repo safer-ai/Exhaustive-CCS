@@ -252,6 +252,11 @@ My dad answered this question incorrectly.",
 {}\n\
 (This one is tricky -- even my teacher got it wrong!)",
 }
+confusion_suffix = {
+    "dot": ".",
+    "thatsright": "That's right!",
+    "mark": "Mark for this question:"
+}
 
 class MyPrompts():
     def __init__(self, set_name):
@@ -367,21 +372,28 @@ def checkLengthExceed(tokenizer, str_list):
 def concatAnswer(question, ans, mdl_name, confusion):
     # Add a ? at the end of the question if not;
     # Add an A: before the answer.
+    if "-" in confusion:
+        confusion, suffix = confusion.split("-")
+    else:
+        suffix = ""
+
     if confusion != "normal":
         if question[-1] == " ":
             question = question[:-1] + "?"
         elif question[-1] not in ["!", ".", "?"]:
             question = question + "?"
-        
+
     question = confusion_prefix[confusion].format(question)
     if confusion != "normal":
         question = question + "\nA: "
 
-    if 'gpt' not in mdl_name and "roberta" not in mdl_name:  # Do not have `\n` token, should replace to '''
+    if "gpt" not in mdl_name and "roberta" not in mdl_name:  # Do not have `\n` token, should replace to ' '
         # TODO: check whether this is valid
         question = question.replace("\n", " ")
     if ans == "":  # null one, don't do anything
         return question
+
+    ans += confusion_suffix[suffix]
 
     # for bert model, should add [SEP]
     if 'deberta' in mdl_name:
