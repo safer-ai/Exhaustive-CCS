@@ -176,8 +176,6 @@ if __name__ == "__main__":
 
                 n_components = 1 if method == "TPC" else -1
 
-                # return a dict with the same shape as test_dict
-                # for each key test_dict[key] is a unitary list
                 save_file_prefix = (
                     f"{args.save_dir}/states_{args.model}_{maybeAppendProjectSuffix(method)}/{train_set}"
                     if args.save_states
@@ -199,6 +197,8 @@ if __name__ == "__main__":
                             os.path.join(args.save_dir, "params", "intercept_{}.npy".format(params_file_name))
                         )
 
+                # return a dict with the same shape as test_dict
+                # for each key test_dict[key] is a unitary list
                 res, lss, pmodel, cmodel = mainResults(
                     data_dict = data_dict, 
                     permutation_dict = permutation_dict, 
