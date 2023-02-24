@@ -181,6 +181,13 @@ class ConsistencyMethod(object):
         
         return similarity_loss + confidence_loss
     
+    def get_losses(self, p0, p1):
+        """Returns loss, similarity_loss, confidence_loss"""
+        similarity_loss = self.get_similarity_loss(p0, p1)
+        confidence_loss = self.get_confidence_loss(p0, p1)
+        
+        return similarity_loss + confidence_loss, similarity_loss, confidence_loss
+    
     # return the probability tuple (p0, p1)
     def transform(self, data: list, theta_np = None):
         if theta_np is None:
@@ -191,7 +198,7 @@ class ConsistencyMethod(object):
         return p0, p1
 
     # Return the accuracy of (data, label)
-    def get_acc(self, theta_np, data: list, label, getloss, save_file=None):
+    def get_acc(self, theta_np, data: list, label, getloss=False, save_file=None):
         """
         Computes the accuracy of a given direction theta_np represented as a numpy array
         """
@@ -208,8 +215,8 @@ class ConsistencyMethod(object):
             df.to_csv(save_file, index=False)
 
         if getloss:
-            loss = self.get_loss(torch.tensor(p0), torch.tensor(p1)).cpu().detach().item()
-            return max(acc, 1 - acc), loss 
+            losses = [l.cpu().detach().item() for l in self.get_losses(torch.tensor(p0), torch.tensor(p1))]
+            return max(acc, 1 - acc), losses
         return max(acc, 1 - acc)
     
         
@@ -475,7 +482,7 @@ class myClassifyModel(LogisticRegression):
             prediction = self.model.predict(data)
             acc = max(np.mean(prediction == label), np.mean(1 - prediction == label))
             if getloss:
-                return acc, 0.0
+                return acc, (0.0, 0.0, 0.0)
             return acc
         else:
             if save_file is not None:
@@ -492,7 +499,7 @@ class myClassifyModel(LogisticRegression):
                 if self.method == "BSS":
                     loss = getSingleLoss(data @ self.coef_.T + self.intercept_)
                 else:
-                    loss = 0.0
+                    loss = (0.0, 0.0, 0.0)
                 return acc, loss
             return acc
 
@@ -602,14 +609,6 @@ def mainResults(
         
         classify_model.fit(data = data, label=label, **learn_dict)
 
-        # testdata, testlabel = getPair(data_dict = data_dict, permutation_dict = permutation_dict, projection_model = projection_model, target_dict = test_dict, split="test")
-        # testdata = [testdata[:,:testdata.shape[1]//2],
-        #             testdata[:,testdata.shape[1]//2:]]
-        # acc, lss = classify_model.score(testdata, testlabel, getloss = True)
-        # print("On test dict, acc = {:.2f}, loss = {:.4f}".format(
-        #     acc * 100, lss
-        # ))
-
     elif classification_method == "BSS": 
         if project_along_mean_diff:
             raise ValueError("BSS does not support project_along_mean_diff")
@@ -653,9 +652,9 @@ def mainResults(
             if save_file:
                 os.makedirs(os.path.dirname(save_file), exist_ok=True)
             
-            acc, loss = classify_model.score(data, label, getloss = True, save_file=save_file)
+            acc, losses = classify_model.score(data, label, getloss = True, save_file=save_file)
             res[key].append(acc)
-            lss[key].append(loss)
+            lss[key].append(losses)
 
     duration = time.time() - start
     if print_more:

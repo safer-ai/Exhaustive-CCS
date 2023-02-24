@@ -135,7 +135,8 @@ if __name__ == "__main__":
                         csv = adder(csv, model, global_prefix, "0-shot", 
                                     prompt_level= idx, train= "", test = setname,
                                     accuracy = zeros_acc[setname][idx],
-                                    std = "", location = "", layer = "", loss = "")
+                                    std = "", location = "", layer = "", loss = "",
+                                    sim_loss = "", cons_loss = "")
 
 
             saveCsv(csv, global_prefix, "After calculating zeroshot performance.")
@@ -242,28 +243,30 @@ if __name__ == "__main__":
                         bias = np.concatenate([old_biases, bias], axis=0)
                     saveParams(params_file_name, coef, bias)
                 
-                acc, std, loss = getAvg(res), np.mean([np.std(lis) for lis in res.values()]), np.mean([np.mean(lis) for lis in lss.values()])
-                print("method = {:8}, prompt_level = {:8}, train_set = {:20}, avgacc is {:.2f}, std is {:.2f}, loss is {:.4f}".format(
-                    maybeAppendProjectSuffix(method), "all", train_set, 100 * acc, 100 * std, loss)
+                acc, std, loss, sim_loss, cons_loss = getAvg(res), np.mean([np.std(lis) for lis in res.values()]), *np.mean([np.mean(lis) for lis in lss.values()], axis=0)
+                print("method = {:8}, prompt_level = {:8}, train_set = {:20}, avgacc is {:.2f}, std is {:.2f}, loss is {:.4f}, sim_loss is {:.4f}, cons_loss is {:.4f}".format(
+                    maybeAppendProjectSuffix(method), "all", train_set, 100 * acc, 100 * std, loss, sim_loss, cons_loss)
                 )
 
                 for key in dataset_list:
                     if args.prompt_save_level == "all":
+                        loss, sim_loss, cons_loss = np.mean(lss[key], axis=0) if methodHasLoss(method) else ("", "", "")
                         csv = adder(csv, model, global_prefix, maybeAppendProjectSuffix(method), "all", train_set, key,
                                     accuracy = np.mean(res[key]),
                                     std = np.std(res[key]),
                                     location = args.location,
                                     layer = args.layer,
-                                    loss = np.mean(lss[key]) if methodHasLoss(method) else ""
+                                    loss = loss, sim_loss = sim_loss, cons_loss = cons_loss,
                                     )
                     else:
+                        loss, sim_loss, cons_loss = lss[key][idx] if methodHasLoss(method) else ("", "", "")
                         for idx in range(len(res[key])):
                             csv = adder(csv, model, global_prefix, maybeAppendProjectSuffix(method), idx, train_set, key,
                                         accuracy = res[key][idx],
                                         std = "",
                                         location = args.location,
                                         layer = args.layer,
-                                        loss = lss[key][idx] if methodHasLoss(method) else ""
+                                        loss = loss, sim_loss = sim_loss, cons_loss = cons_loss,
                                         )
 
         saveCsv(csv, global_prefix, "After finish {}".format(maybeAppendProjectSuffix(method)))

@@ -2,3 +2,4 @@
 *.csv
 *.npy
 __pycache__
+*.zip
