@@ -243,7 +243,7 @@ if __name__ == "__main__":
                         bias = np.concatenate([old_biases, bias], axis=0)
                     saveParams(params_file_name, coef, bias)
                 
-                acc, std, loss, sim_loss, cons_loss = getAvg(res), np.mean([np.std(lis) for lis in res.values()]), *np.mean([np.mean(lis) for lis in lss.values()], axis=0)
+                acc, std, loss, sim_loss, cons_loss = getAvg(res), np.mean([np.std(lis) for lis in res.values()]), *np.mean([np.mean(lis, axis=0) for lis in lss.values()], axis=0)
                 print("method = {:8}, prompt_level = {:8}, train_set = {:20}, avgacc is {:.2f}, std is {:.2f}, loss is {:.4f}, sim_loss is {:.4f}, cons_loss is {:.4f}".format(
                     maybeAppendProjectSuffix(method), "all", train_set, 100 * acc, 100 * std, loss, sim_loss, cons_loss)
                 )
