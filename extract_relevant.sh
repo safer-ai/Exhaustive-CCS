@@ -4,43 +4,31 @@ methods="CCS LR Random CCS-md LR-md Random-md"
 uqa_good_ds="imdb amazon-polarity ag-news dbpedia-14 copa boolq story-cloze"
 gptj_good_ds="imdb amazon-polarity ag-news dbpedia-14"
 
-# Extract UQA states (once)
-python extraction_main.py --model unifiedqa-t5-11b --datasets $uqa_good_ds --method_list $methods  --save_states --seed 0
-cp extraction_results/unifiedqa-t5-11b_normal_0.csv extraction_results/uqa_good_0.csv
+model_names=(unifiedqa-t5-11b gpt-j-6B)
+model_to_ds=(uqa_good_ds gptj_good_ds)
+model_to_short=(uqa gptj)
+test_on_trains=("" "--test_on_train")
+test_on_train_extensions=("" "/test_on_train")
 
-# Extract UQA on datasets where it is good
-for seed in {1..9}; do
-    python extraction_main.py --model unifiedqa-t5-11b --datasets $uqa_good_ds --method_list $methods --seed $seed
-    # copy the csv file so that it doesn't get overwritten
-    cp extraction_results/unifiedqa-t5-11b_normal_${seed}.csv extraction_results/uqa_good_${seed}.csv
-done
+for i_test_on_train in 0 1; do
+    for i_model in 0 1; do
+        model=${model_names[$i_model]}
+        ds=${!model_to_ds[$i_model]}
+        short=${model_to_short[$i_model]}
+        test_on_train=${test_on_trains[$i_test_on_train]}
+        test_on_train_extension=${test_on_train_extensions[$i_test_on_train]}
+        for seed in {0..9}; do
+            # if seed == 0, save states
+            save_states=""
+            if [ $seed -eq 0 ]; then
+                save_states="--save_states" 
+            fi
 
-# Extract GPT-J on datasets where it is good
-for seed in {0..9}; do
-    python extraction_main.py --model gpt-j-6B --datasets $gptj_good_ds --method_list $methods --seed $seed
-    # copy the csv file so that it doesn't get overwritten
-    cp extraction_results/gpt-j-6B_normal_${seed}.csv extraction_results/gptj_good_${seed}.csv
-done
-
-
-# Same but test on train
-
-# Extract UQA states (once)
-python extraction_main.py --model unifiedqa-t5-11b --datasets $uqa_good_ds --method_list $methods --save_states --seed 0 --save_dir extraction_results/train --test_on_train
-cp extraction_results/test_on_train/unifiedqa-t5-11b_normal_0.csv extraction_results/test_on_train/uqa_good_0.csv
-
-# Extract UQA on datasets where it is good
-for seed in {1..4}; do
-    python extraction_main.py --model unifiedqa-t5-11b --datasets $uqa_good_ds --method_list $methods --seed $seed --save_dir extraction_results/train --test_on_train
-    # copy the csv file so that it doesn't get overwritten
-    cp extraction_results/test_on_train/unifiedqa-t5-11b_normal_${seed}.csv extraction_results/test_on_train/uqa_good_${seed}.csv
-done
-
-# Extract GPT-J on datasets where it is good
-for seed in {0..9}; do
-    python extraction_main.py --model gpt-j-6B --datasets $gptj_good_ds --method_list $methods --seed $seed --save_dir extraction_results/train --test_on_train
-    # copy the csv file so that it doesn't get overwritten
-    cp extraction_results/test_on_train/gpt-j-6B_normal_${seed}.csv extraction_results/test_on_train/gptj_good_${seed}.csv
+            python extraction_main.py --model $model --datasets $ds --method_list $methods --seed $seed --save_dir extraction_results$test_on_train_extension $save_states $test_on_train
+            # copy the csv file so that it doesn't get overwritten
+            cp extraction_results${test_on_train_extension}/${model}_normal_${seed}.csv extraction_results${test_on_train_extension}/${short}_good_${seed}.csv
+        done
+    done
 done
 
 # RRCS on UQA
