@@ -30,38 +30,47 @@ for i_test_on_train in 0 1; do
     done
 done
 
-# test different prefixes
+# Test different prefixes
 
+methods="CCS LR Random"
 prefixes=("normal-dot" "normal-thatsright" "normal-mark")
-for prefix in "${prefixes[@]}"; do
-    for i_model in 0 1; do
-        model=${model_names[$i_model]}
-        ds=${!model_to_ds[$i_model]}
-        short=${model_to_short[$i_model]}
-        for seed in {0..9}; do
-            # if seed == 0, save states
-            save_states=""
-            if [ $seed -eq 0 ]; then
-                save_states="--save_states" 
-            fi
-
-            python generation_main.py --model $model --datasets $ds --method_list $methods --seed $seed $save_states --prefix $prefix
+layers=(-1 -5 -9)
+save_dir_per_layer=("", "layer-5", "layer-9")
+for i_layer in 1 2; do
+    layer=${layers[$i_layer]}
+    save_dir=${save_dir_per_layer[$i_layer]}
+    for prefix in "${prefixes[@]}"; do
+        for i_model in 0 1; do
+            model=${model_names[$i_model]}
+            ds=${!model_to_ds[$i_model]}
+            short=${model_to_short[$i_model]}
+            for seed in {0..9}; do
+                # if seed == 0, save states
+                save_states=""
+                if [ $seed -eq 0 ]; then
+                    save_states="--save_states" 
+                fi
+                python extraction_main.py --model $model --datasets $ds --method_list $methods --seed $seed $save_states --prefix $prefix --layer $layer --save_dir extraction_results/$save_dir
+            done
         done
     done
 done
 
-# RRCS on UQA
+# RRCS
 
 RCCS_STRING=$(printf "RCCS%s " $(seq 0 19))
 
-# Extract UQA states (once)
-python extraction_main.py --model unifiedqa-t5-11b --datasets $uqa_good_ds --method_list $RCCS_STRING  --save_states --seed 0
-cp extraction_results/unifiedqa-t5-11b_normal_0.csv extraction_results/uqa_goodrccs_0.csv
+for i_model in 1 0; do
+    model=${model_names[$i_model]}
+    ds=${!model_to_ds[$i_model]}
+    short=${model_to_short[$i_model]}
+    for seed in {0..4}; do
+        # if seed == 0, save states
+        save_states=""
+        if [ $seed -eq 0 ]; then
+            save_states="--save_states" 
+        fi
 
-# Extract UQA on datasets where it is good
-for seed in {1..9}; do
-    python extraction_main.py --model unifiedqa-t5-11b --datasets $uqa_good_ds --method_list $RCCS_STRING --seed $seed --save_dir extraction_results/rccs
+        python extraction_main.py --model $model --datasets $ds --method_list $RCCS_STRING --seed $seed --save_dir extraction_results/rccs $save_states
+    done
 done
-
-# when all is done, save a copy of the folder
-cp -r extraction_results extraction_results_work
