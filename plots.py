@@ -10,7 +10,8 @@ from typing import Literal, Optional
 # increase figure size to (8, 8)
 from matplotlib import rcParams
 
-rcParams["figure.figsize"] = (8, 8)
+rcParams["figure.figsize"] = (10, 6)
+rcParams["figure.dpi"] = 150
 plt.style.use('ggplot')
 # %%
 # Constants
@@ -47,9 +48,10 @@ def load_probs(model_name: str, train: str, test: str, method: str = "CCS", save
     pattern = f"{test}*_{method}.csv" if test != "all" else f"*_{method}.csv"
     return pd.concat([pd.read_csv(f) for f in folder.glob(pattern)])
 
-
-def load_stats(model_name: str, train: str, test: str, method: str = "CCS", prefix: str = "normal"):
-    dir = (SAVE_DIR / "rccs") if method.startswith("RCCS") else SAVE_DIR
+def load_stats(model_name: str, train: str, test: str, method: str = "CCS", prefix: str = "normal", save_dir: Optional[Path] = None):
+    save_dir = save_dir or SAVE_DIR
+    
+    dir = (save_dir / "rccs") if method.startswith("RCCS") else save_dir
     csvs = dir.glob(f"{model_name}_{prefix}_*.csv")
     dfs = [pd.read_csv(f) for f in csvs]
 
@@ -64,29 +66,23 @@ def load_stats(model_name: str, train: str, test: str, method: str = "CCS", pref
         dfs = [df[df["test"] == test] for df in dfs]
         assert all(len(df) == 1 for df in dfs)
         return {
-            "accuracy": np.array([df["accuracy"].values[0] for df in dfs]),
-            "loss": np.array([df["loss"].values[0] for df in dfs]),
-            "cons_loss": np.array([df["cons_loss"].values[0] for df in dfs]),
-            "sim_loss": np.array([df["sim_loss"].values[0] for df in dfs]),
-        }
+            k: np.array([df[k].values[0] for df in dfs]) for k in ["accuracy", "loss", "cons_loss", "sim_loss"]
+            if all(k in df.columns for df in dfs)
+        } # k: (seeds,)
 
-    # Average by dataset
+    # Average by seed across datasets
     return {
-        "accuracy": np.array([df["accuracy"].mean() for df in dfs]),
-        "loss": np.array([df["loss"].mean() for df in dfs]),
-        "cons_loss": np.array([df["cons_loss"].mean() for df in dfs]),
-        "sim_loss": np.array([df["sim_loss"].mean() for df in dfs]),
-    }
+            k: np.array([df[k].mean() for df in dfs]) for k in ["accuracy", "loss", "cons_loss", "sim_loss"]
+            if all(k in df.columns for df in dfs)
+        } # k: (seeds,)
 
 
 def load_rccs_stats(model_name: str, train: str, test: str):
     stats_per_it = [load_stats(model_name, train, test, f"RCCS{it}") for it in range(RCCS_ITERS)]
+    
     return {
-        "accuracy": np.array([stats["accuracy"] for stats in stats_per_it]),  # (it, seed)
-        "loss": np.array([stats["loss"] for stats in stats_per_it]),  # (it, seed)
-        "cons_loss": np.array([stats["cons_loss"] for stats in stats_per_it]),  # (it, seed)
-        "sim_loss": np.array([stats["sim_loss"] for stats in stats_per_it]),  # (it, seed)
-    }
+        k: np.array([stats[k] for stats in stats_per_it]) for k in ["accuracy", "loss", "cons_loss", "sim_loss"] if all(k in stats for stats in stats_per_it)
+    } # k: (it, seeds)
 
 
 def ccs_loss(p0, p1):
@@ -108,19 +104,26 @@ def load_params(model_name: str, train: str, method: str = "CCS"):
         "intercepts": np.array([intercept for intercept in intercepts]),  # (seed, it, nhid)
     }
 
-def boxplots(positions, data, label, color, width=0.5, obj=plt):
-    return [(obj.boxplot(data, positions=positions, notch=False, patch_artist=True, showfliers=False,
+def boxplots(positions, data, label, color, width=0.5, obj=plt, hatches=""):
+    ax = obj.boxplot(data, positions=positions, notch=False, patch_artist=True, showfliers=False,
             boxprops=dict(facecolor="none", color=color),
             capprops=dict(color=color),
             whiskerprops=dict(color=color),
             flierprops=dict(color=color, markeredgecolor=color),
             medianprops=dict(color=color),
             widths=[width]*len(positions),
-        )["boxes"][0], label)]
+        )
+    boxes = ax["boxes"]
+    for box in boxes:
+        box.set_hatch(hatches)
+    return [(boxes[0], label)]
 
 #%%
 # CCS is able to find a single direction which correctly classifies statements across datasets
-for model in [UQA, GPTJ]:
+
+fig, axs = plt.subplots(1, 2, sharey=True)
+
+for ax, model in zip(axs, [UQA, GPTJ]):
     bar_names = MODEL_GOOD_DS[model]
     lr_accs = [load_stats(model, d, d, "LR")["accuracy"] for d in bar_names]
     separate_accs = [load_stats(model, d, d, "CCS")["accuracy"] for d in bar_names]
@@ -129,20 +132,26 @@ for model in [UQA, GPTJ]:
     x_pos = np.arange(len(bar_names))
     width = 0.2
     legend_info = []
-    legend_info += boxplots(x_pos - width, lr_accs, "Logistic Regression (Supervised)", LR_COL, width=width)
-    legend_info += boxplots(x_pos, separate_accs, "CCS", SEPARATE_COL, width=width)
-    legend_info += boxplots(x_pos + width, together_accs, "CCS, trained together", TOGETHER_COL, width=width)
-    plt.legend([l[0] for l in legend_info], [l[1] for l in legend_info])
-    plt.xticks(x_pos, bar_names, rotation=45)
-    plt.ylim(0.5, 1)
-    plt.title(
-        f"Accuracies of {SHORT_NAMES[model]} on all datasets\nCCS on each dataset vs. trained together\n(2 std error bars over 10 runs){TEST_ON_TRAIN_suffix}"
-    )
-    plt.tight_layout()
-    plt.show()
+    legend_info += boxplots(x_pos - width, lr_accs, "Logistic Regression (Supervised)", LR_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos, separate_accs, "CCS", SEPARATE_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos + width, together_accs, "CCS, trained together", TOGETHER_COL, width=width, obj=ax)
+    if model == UQA:
+        ax.legend([l[0] for l in legend_info], [l[1] for l in legend_info])
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(bar_names, rotation=45)
+    ax.set_ylim(0.5, 1)
+    ax.set_title(SHORT_NAMES[model])
+plt.suptitle(
+    f"Accuracies on all datasets\nCCS on each dataset vs. trained together{TEST_ON_TRAIN_suffix}"
+)
+plt.tight_layout()
+plt.show()
 #%%
 # CCS does so better than random, but not by a huge margin
-for model in [UQA, GPTJ]:
+
+fig, axs = plt.subplots(1, 2, sharey=True)
+
+for ax, model in zip(axs, [UQA, GPTJ]):
     bar_names = MODEL_GOOD_DS[model]
     lr_accs = [load_stats(model, d, d, "LR")["accuracy"] for d in bar_names]
     separate_accs = [load_stats(model, d, d, "CCS")["accuracy"] for d in bar_names]
@@ -151,25 +160,27 @@ for model in [UQA, GPTJ]:
 
     x_pos = np.arange(len(bar_names))
     width = 0.2
-    
     legend_info = []
-    legend_info += boxplots(x_pos - 3*width/2, lr_accs, "Logistic Regression (Supervised)", LR_COL, width=width)
-    legend_info += boxplots(x_pos - width/2, separate_accs, "CCS", SEPARATE_COL, width=width)
-    legend_info += boxplots(x_pos + width/2, together_accs, "CCS, trained together", TOGETHER_COL, width=width)
-    legend_info += boxplots(x_pos + 3*width/2, random_accs, "Random", RANDOM_COL, width=width)
-    plt.legend([l[0] for l in legend_info], [l[1] for l in legend_info])
-    plt.xticks(x_pos, bar_names, rotation=45)
-    plt.ylim(0.5, 1)
-    plt.title(
-        f"Accuracies of {SHORT_NAMES[model]} on all datasets\nCCS on each dataset vs. trained together vs. Random\n(over 10 runs){TEST_ON_TRAIN_suffix}"
-    )
-    plt.tight_layout()
-    plt.show()
+    legend_info += boxplots(x_pos - width, lr_accs, "Logistic Regression (Supervised)", LR_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos, separate_accs, "CCS", SEPARATE_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos + width, together_accs, "CCS, trained together", TOGETHER_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos + 3*width/2, random_accs, "Random", RANDOM_COL, width=width, obj=ax)
+    if model == UQA:
+        ax.legend([l[0] for l in legend_info], [l[1] for l in legend_info])
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(bar_names, rotation=45)
+    ax.set_ylim(0.5, 1)
+    ax.set_title(SHORT_NAMES[model])
+plt.suptitle(
+    f"Accuracies on all datasets\nCCS on each dataset vs. trained together vs. Random{TEST_ON_TRAIN_suffix}"
+)
+plt.tight_layout()
+plt.show()
 
 # %%
 # CCS does not find the single direction with high accuracy
 
-def plot_rccs_accs(ds, model):
+def plot_rccs_accs(ds, model, ax: plt.Axes, show_legend):
     if TEST_ON_TRAIN:
         return
     
@@ -187,43 +198,52 @@ def plot_rccs_accs(ds, model):
         
         mean_accs = np.mean(accs, axis=1)
         for i, acc in enumerate(accs.T):
-            plt.plot(acc, color=col, alpha=0.2)
-        plt.plot(mean_accs, color=col, label=f"CCS{name}, mean accuracy")
-    plt.axhspan(
+            ax.plot(acc, color=col, alpha=0.2)
+        ax.plot(mean_accs, color=col, label=f"CCS{name}, mean accuracy")
+    ax.axhspan(
         rdm_mean - 2 * rdm_std, rdm_mean + 2 * rdm_std, color=RANDOM_COL, alpha=0.2, label="random accuracy (2 std)"
     )
-    plt.ylim(0.5, 1)
-    plt.ylabel("Accuracy")
-    plt.xlabel("Iteration of RCCS")
-    plt.xticks(np.arange(0, RCCS_ITERS, 4))
-    ds = "all datasets" if ds == "all" else ds
-    plt.title(f"Accuracies of {SHORT_NAMES[model]} on {ds}\n(5 runs){TEST_ON_TRAIN_suffix}")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    ax.set_ylim(0.5, 1)
+    ax.set_ylabel("Accuracy")
+    ax.set_xlabel("Iteration of RCCS")
+    ax.set_xticks(np.arange(0, RCCS_ITERS, 4))
+    if show_legend:
+        ax.legend()
+    ax.set_title(SHORT_NAMES[model])
+
 
 for ds in ["all", "imdb"]:
-    for model in [UQA, GPTJ]:
-        plot_rccs_accs(ds, model)
+    fig, axs = plt.subplots(1, 2, sharey=True)
+    for ax, model in zip(axs, [UQA, GPTJ]):
+        plot_rccs_accs(ds, model, ax, show_legend=(model == GPTJ))
+    ds = "all datasets (average)" if ds == "all" else ds
+    plt.suptitle(f"Recursive CCS accuracies on {ds}\n(5 runs){TEST_ON_TRAIN_suffix}")
+    plt.tight_layout()
+    plt.show()
 
 # %%
 # Given that there are many “good” directions, does CCS always find roughly the same one?
 
 for dataset in ["all", "imdb"]:
-    for model in [UQA, GPTJ]:
+    fig, axs = plt.subplots(1, 2, figsize=(10,4))
+    for ax, model in zip(axs, [UQA, GPTJ]):
         params = load_params(model, dataset, "CCS")["coefs"].squeeze(1)
         cosines = np.array([
             abs(np.dot(p1, p2) / (np.linalg.norm(p1) * np.linalg.norm(p2))) for p1, p2 in combinations(params, 2)
         ])
-        plt.hist(cosines, bins=30, range=(0, 1))
-        plt.xlabel("Cosine similarity")
-        plt.xlim(0, 1)
-        plt.title(f"Pairwise cosine similarities between directions on different seeds\n{SHORT_NAMES[model]}, probes trained on {'all datasets (together)' if dataset == 'all' else dataset}{TEST_ON_TRAIN_suffix}")
-        plt.show()
+        ax.hist(cosines, bins=30, range=(0, 1))
+        ax.set_xlabel("Cosine similarity")
+        ax.set_xlim(0, 1)
+        ax.set_title(SHORT_NAMES[model])
+    plt.suptitle(f"Pairwise cosine similarities histogram, between directions on different seeds\nProbes trained on {'all datasets (together)' if dataset == 'all' else dataset}{TEST_ON_TRAIN_suffix}")
+    plt.tight_layout()
+    plt.show()
 # %%
 # ablating along the difference of the means direction makes both CCS & Supervised learning fail
 
-for model in [UQA, GPTJ]:
+fig, axs = plt.subplots(1, 2, sharey=True)
+
+for ax, model in zip(axs, [UQA, GPTJ]):
     bar_names = MODEL_GOOD_DS[model]
     lr_accs = [load_stats(model, d, d, "LR-md")["accuracy"] for d in bar_names]
     separate_accs = [load_stats(model, d, d, "CCS-md")["accuracy"] for d in bar_names]
@@ -232,32 +252,37 @@ for model in [UQA, GPTJ]:
 
     x_pos = np.arange(len(bar_names))
     width = 0.2
-    
     legend_info = []
-    legend_info += boxplots(x_pos - 3*width/2, lr_accs, "Logistic Regression (Supervised)", LR_COL, width=width)
-    legend_info += boxplots(x_pos - width/2, separate_accs, "CCS", SEPARATE_COL, width=width)
-    legend_info += boxplots(x_pos + width/2, together_accs, "CCS, trained together", TOGETHER_COL, width=width)
-    legend_info += boxplots(x_pos + 3*width/2, random_accs, "Random", RANDOM_COL, width=width)
-    plt.legend([l[0] for l in legend_info], [l[1] for l in legend_info])
-    plt.xticks(x_pos, bar_names, rotation=45)
-    plt.ylim(0.5, 1)
-    plt.title(
-        f"Accuracies of {SHORT_NAMES[model]} on all datasets\nCCS on each dataset vs. trained together vs. Random\n(over 10 runs){TEST_ON_TRAIN_suffix}"
-    )
-    plt.tight_layout()
-    plt.show()
+    legend_info += boxplots(x_pos - width, lr_accs, "Logistic Regression (Supervised)", LR_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos, separate_accs, "CCS", SEPARATE_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos + width, together_accs, "CCS, trained together", TOGETHER_COL, width=width, obj=ax)
+    legend_info += boxplots(x_pos + 3*width/2, random_accs, "Random", RANDOM_COL, width=width, obj=ax)
+    if model == UQA:
+        ax.legend([l[0] for l in legend_info], [l[1] for l in legend_info])
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(bar_names, rotation=45)
+    ax.set_ylim(0.5, 1)
+    ax.set_title(SHORT_NAMES[model])
+plt.suptitle(
+f"""Accuracies on all datasets
+After ablation by the difference of the means direction
+CCS on each dataset vs. trained together vs. Random{TEST_ON_TRAIN_suffix}"""
+)
+plt.tight_layout()
+plt.show()
 
 # %%
 
-def plot_stacked_bar(positions, sim_loss, cons_loss, label, col, width):
+def plot_stacked_bar(positions, sim_loss, cons_loss, label, col, width, ax):
     sim_means = np.mean(sim_loss, axis=1)
     cons_means = np.mean(cons_loss, axis=1)
     total_loss_std = np.std(np.array(sim_loss) + np.array(cons_loss), axis=1)
-    plt.bar(positions, sim_means, width=width, color=col, label=f"{label}, confidence loss", hatch="O")
-    plt.bar(positions, cons_means, width=width, color=col, bottom=sim_means, label=f"{label}, similarity loss", hatch=".",
+    ax.bar(positions, sim_means, width=width, color=col, label=f"{label}, confidence loss", hatch="O")
+    ax.bar(positions, cons_means, width=width, color=col, bottom=sim_means, label=f"{label}, similarity loss", hatch=".",
             yerr=total_loss_std)
-    
-for model in [UQA, GPTJ]:
+
+fig, axs = plt.subplots(1, 2, sharey=True)
+for ax, model in zip(axs, [UQA, GPTJ]):
     bar_names = MODEL_GOOD_DS[model]
     separate_sim_losses = [load_stats(model, d, d, "CCS")["sim_loss"] for d in bar_names]
     together_sim_losses = [load_stats(model, "all", d, "CCS")["sim_loss"] for d in bar_names]
@@ -267,80 +292,109 @@ for model in [UQA, GPTJ]:
     
     x_pos = np.arange(len(bar_names))
     width = 0.25
-    plot_stacked_bar(x_pos - width / 2, separate_sim_losses, separate_cons_losses, "CCS", SEPARATE_COL, width)
-    plot_stacked_bar(x_pos + width / 2, together_sim_losses, together_cons_losses, "CCS, trained together", TOGETHER_COL, width)
+    plot_stacked_bar(x_pos - width / 2, separate_sim_losses, separate_cons_losses, "CCS", SEPARATE_COL, width, ax)
+    plot_stacked_bar(x_pos + width / 2, together_sim_losses, together_cons_losses, "CCS, trained together", TOGETHER_COL, width, ax)
     
-    plt.xticks(x_pos, bar_names, rotation=45)
-    plt.axhline(0.2, color="black", label="loss for constant guess")
-    plt.axhline(0, color="lightgray")
-    plt.title(
-        f"Losses of {SHORT_NAMES[model]} on all datasets\nCCS on each dataset vs. trained together\n(over 10 runs){TEST_ON_TRAIN_suffix}"
-    )
-    plt.legend(loc="upper left")
-    plt.tight_layout()
-    plt.show()
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(bar_names, rotation=45)
+    ax.axhline(0.2, color="black", label="loss for constant guess")
+    ax.axhline(0, color="lightgray")
+    if model == GPTJ:
+        ax.legend(loc="upper right")
+    ax.set_title(SHORT_NAMES[model])
+    
+plt.suptitle(
+    f"Losses on all datasets\nCCS on each dataset vs. trained together{TEST_ON_TRAIN_suffix}"
+)
+plt.tight_layout()
+plt.show()
 
 # %%
 # My reproduction of Collin’s plots
 
-for test_on_train in [True, False]:
+fig, axs = plt.subplots(1, 2, figsize=(8,5))
+for ax, test_on_train in zip(axs, [False, True]):
     save_dir = SAVE_DIR / "test_on_train" if test_on_train else SAVE_DIR
-    test_on_train_suffix = "\nTested on the train set" if test_on_train else "\nTested on the test set"
     probs = load_probs(UQA, "copa", "copa", "CCS", save_dir=save_dir)
     p0, p1, labels = probs.values.T
     p = (p1 + (1 - p0)) / 2
     true = p[labels == 1]
     false = p[labels == 0]
-    plt.hist(true, bins=30, alpha=0.5, label="True", range=(0, 1))
-    plt.hist(false, bins=30, alpha=0.5, label="False", range=(0, 1))
-    plt.title(f"$p = (p^+ + 1 - p^-)/2$\nCOPA, UQA, CCS{test_on_train_suffix}")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    ax.hist(true, bins=30, alpha=0.5, label="True", range=(0, 1))
+    ax.hist(false, bins=30, alpha=0.5, label="False", range=(0, 1))
+    if test_on_train:
+        ax.set_title("Tested on the train set")
+        ax.legend(loc="upper center")
+    else:
+        ax.set_title("Tested on the test set")
+plt.suptitle(f"$p = (p^+ + 1 - p^-)/2$\nCOPA, UQA, CCS")
+plt.tight_layout()
+plt.show()
 
 # %%
 # CCS does not find truth when the model doesn’t try to predict a truth-relevant output
 
 prefixes = ["normal", "normal-dot", "normal-thatsright", "normal-mark"]
 prefix_explanations = {
-    "normal": "No suffix",
+    # "normal": "No suffix",
     "normal-dot": "{Q&A}.",
     "normal-thatsright": "{Q&A}That's right!",
     "normal-mark": "{Q&A}Mark for this question:"
 }
 
 layer_to_save_dir = {
-    "": SAVE_DIR,
-    "4th layer before last\n": SAVE_DIR / "layer-5",
+    "\nlast layer": SAVE_DIR,
+    # "\n4th layer before last": SAVE_DIR / "layer-5",
+    "\n8th layer before last": SAVE_DIR / "layer-9",
 }
 
-for layer_name, save_dir in layer_to_save_dir.items():
+prefix_to_hashes = {
+    # "normal": "",
+    "normal-dot": "O",
+    "normal-thatsright": "////",
+    "normal-mark": "\\\\\\\\",
+}
+n_prefixes = len(prefix_to_hashes)
 
-    for model in [UQA, GPTJ]:
-        fig, axs = plt.subplots(len(prefixes), 1, figsize=(8, 16), sharex=True)
+fig, axs = plt.subplots(2, len(layer_to_save_dir), figsize=(12, 14))
+
+for j, (layer_name, save_dir) in enumerate(layer_to_save_dir.items()):
+    
+    for i, model in enumerate([UQA, GPTJ]):
+        ax = axs[i,j]
         
-        for i,prefix in enumerate(["normal", "normal-dot", "normal-thatsright", "normal-mark"]):
+        legend_info = []
+        for i,(prefix, hatches) in enumerate(prefix_to_hashes.items()):
+            width = 0.23
+            prefix_offset = (i - n_prefixes // 2) * width / n_prefixes
+            
             bar_names = MODEL_GOOD_DS[model]
-            lr_accs = [load_stats(model, d, d, "LR", prefix=prefix)["accuracy"] for d in bar_names]
-            separate_accs = [load_stats(model, d, d, "CCS", prefix=prefix)["accuracy"] for d in bar_names]
-            together_accs = [load_stats(model, "all", d, "CCS", prefix=prefix)["accuracy"] for d in bar_names]
-            random_accs = [load_stats(model, "all", d, "Random", prefix=prefix)["accuracy"] for d in bar_names]
+            lr_accs = [load_stats(model, d, d, "LR", prefix=prefix, save_dir=save_dir)["accuracy"] for d in bar_names]
+            separate_accs = [load_stats(model, d, d, "CCS", prefix=prefix, save_dir=save_dir)["accuracy"] for d in bar_names]
+            together_accs = [load_stats(model, "all", d, "CCS", prefix=prefix, save_dir=save_dir)["accuracy"] for d in bar_names]
+            random_accs = [load_stats(model, "all", d, "Random", prefix=prefix, save_dir=save_dir)["accuracy"] for d in bar_names]
 
             x_pos = np.arange(len(bar_names))
-            width = 0.2
             
-            legend_info = []
-            legend_info += boxplots(x_pos - 3*width/2, lr_accs, "Logistic Regression (Supervised)", LR_COL, width=width, obj=axs[i])
-            legend_info += boxplots(x_pos - width/2, separate_accs, "CCS", SEPARATE_COL, width=width, obj=axs[i])
-            legend_info += boxplots(x_pos + width/2, together_accs, "CCS, trained together", TOGETHER_COL, width=width, obj=axs[i])
-            legend_info += boxplots(x_pos + 3*width/2, random_accs, "Random", RANDOM_COL, width=width, obj=axs[i])
-            axs[i].legend([l[0] for l in legend_info], [l[1] for l in legend_info])
-            axs[i].set_xticks(x_pos)
-            axs[i].set_xticklabels(bar_names, rotation=45)
-            axs[i].set_ylim(0.5, 1)
-            axs[i].set_title(prefix_explanations[prefix])
-        plt.suptitle(
-            f"Accuracies of {SHORT_NAMES[model]} on all datasets\nCCS on each dataset vs. trained together vs. Random\n{layer_name}(over 10 runs){TEST_ON_TRAIN_suffix}"
-        )
-        fig.tight_layout()
-        fig.show()
+            explanation = " " + prefix_explanations[prefix]
+            
+            bar_width = width / n_prefixes
+            legend_info += boxplots(x_pos - 3*width/2 + prefix_offset, lr_accs, "LR" + explanation, LR_COL, width=bar_width, obj=ax, hatches=hatches)
+            legend_info += boxplots(x_pos - width/2 + prefix_offset, separate_accs, "CCS" + explanation, SEPARATE_COL, width=bar_width, obj=ax, hatches=hatches)
+            legend_info += boxplots(x_pos + width/2 + prefix_offset, together_accs, "CCS together" + explanation, TOGETHER_COL, width=bar_width, obj=ax, hatches=hatches)
+            legend_info += boxplots(x_pos + 3*width/2 + prefix_offset, random_accs, "Rdm" + explanation, RANDOM_COL, width=bar_width, obj=ax, hatches=hatches)
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(bar_names, rotation=45)
+        ax.set_ylim(0.5, 1)
+        ax.set_title(SHORT_NAMES[model] + layer_name)
+if model == GPTJ:
+    # reorganize legend
+    legend_info = legend_info[0::4] + legend_info[1::4] + legend_info[2::4] + legend_info[3::4]
+    axs[0,1].legend([l[0] for l in legend_info], [l[1] for l in legend_info], loc="upper right")
+        
+plt.suptitle(
+    f"Accuracies on all datasets\nCCS on each dataset vs. trained together vs. Random{TEST_ON_TRAIN_suffix}"
+)
+plt.tight_layout()
+plt.show()
+# %%
